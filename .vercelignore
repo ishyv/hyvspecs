@@ -1,0 +1,10 @@
+node_modules
+.svelte-kit
+.git
+.vercel
+hyvspecs-cli
+local.db
+local.db-journal
+.claude
+.vscode
+docs
