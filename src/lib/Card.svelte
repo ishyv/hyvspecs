@@ -27,6 +27,26 @@
 	{#if envelope.label}
 		<div class="label">{envelope.label}</div>
 	{/if}
+
+	<footer>
+		<a href="/" class="logo-link" title="hyv-specs — share your hardware in 3D">
+			<span class="tooltip">generate your card</span>
+			<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" class="app-logo">
+				<rect width="32" height="32" fill="#0c0c0e" rx="6" stroke="#26282e" stroke-width="1"/>
+				<polyline
+					points="7,11 16,11 16,21 25,21"
+					fill="none"
+					stroke="var(--glow-color, #d0d4dc)"
+					stroke-width="1.5"
+					stroke-linecap="square"
+				/>
+				<rect x="5.25" y="9.25" width="3.5" height="3.5" fill="var(--glow-color, #d0d4dc)"/>
+				<rect x="14.25" y="9.25" width="3.5" height="3.5" fill="var(--glow-color, #d0d4dc)"/>
+				<rect x="14.25" y="19.25" width="3.5" height="3.5" fill="var(--glow-color, #d0d4dc)"/>
+				<rect x="23.25" y="19.25" width="3.5" height="3.5" fill="var(--glow-color, #d0d4dc)"/>
+			</svg>
+		</a>
+	</footer>
 </div>
 
 <style>
@@ -212,6 +232,50 @@
 		text-transform: lowercase;
 	}
 
+	/* --- App Navigation Footer --- */
+	footer {
+		position: absolute;
+		bottom: 1.4rem;
+		right: 1.7rem;
+		z-index: 3;
+		pointer-events: auto; /* Allow link clicks overlaying 3D scene */
+	}
+	.logo-link {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		text-decoration: none;
+		pointer-events: auto;
+		cursor: pointer;
+		outline: none;
+	}
+	.app-logo {
+		width: 32px;
+		height: 32px;
+		display: block;
+		transition: transform 0.2s ease, filter 0.2s ease;
+	}
+	.logo-link:hover .app-logo {
+		transform: scale(1.08);
+		filter: drop-shadow(0 0 6px var(--glow-color, rgba(255, 255, 255, 0.4)));
+	}
+	.tooltip {
+		font-size: 0.62rem;
+		letter-spacing: 0.15em;
+		text-transform: uppercase;
+		color: #6a7178;
+		opacity: 0;
+		transform: translateX(8px);
+		transition: all 0.2s ease;
+		white-space: nowrap;
+		pointer-events: none;
+	}
+	.logo-link:hover .tooltip {
+		opacity: 1;
+		transform: translateX(0);
+		color: #c7ccd1;
+	}
+
 	/* Responsive scaling down to preserve viewport layout constraints on mobile */
 	@media (max-width: 480px) {
 		.power[data-tier="0"] .tier { font-size: 1.15rem; }
@@ -228,5 +292,18 @@
 
 		.power[data-tier="4"] .tier { font-size: 0.7rem; }
 		.power[data-tier="4"] .score { font-size: 2.1rem; }
+
+		/* Responsive footer tweaks */
+		footer {
+			bottom: 1.2rem;
+			right: 1.4rem;
+		}
+		.app-logo {
+			width: 28px;
+			height: 28px;
+		}
+		.tooltip {
+			font-size: 0.58rem;
+		}
 	}
 </style>
