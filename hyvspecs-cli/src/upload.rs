@@ -70,3 +70,54 @@ fn describe(res: reqwest::blocking::Response) -> String {
         format!("{reason} ({status})")
     }
 }
+
+pub fn verify_github_token(token: &str) -> Result<String> {
+    let client = reqwest::blocking::Client::new();
+    let res = client
+        .get("https://api.github.com/user")
+        .bearer_auth(token)
+        .header("User-Agent", "hyvspecs")
+        .send()
+        .context("could not reach github api")?;
+    if !res.status().is_success() {
+        bail!("invalid or expired github token");
+    }
+
+    #[derive(Deserialize)]
+    struct GithubUser {
+        login: String,
+    }
+
+    let user: GithubUser = res.json().context("failed to parse github response")?;
+    Ok(user.login.to_lowercase())
+}
+
+pub fn claim_showcase(
+    endpoint: &str,
+    card_id: &str,
+    edit_token: &str,
+    github_token: &str,
+) -> Result<String> {
+    let client = reqwest::blocking::Client::new();
+    let res = client
+        .patch(format!("{endpoint}/api/showcase/{card_id}"))
+        .bearer_auth(github_token)
+        .json(&json!({
+            "edit_token": edit_token,
+            "claim": true
+        }))
+        .send()
+        .context("could not reach the server")?;
+
+    if !res.status().is_success() {
+        bail!("claim rejected: {}", describe(res));
+    }
+
+    #[derive(Deserialize)]
+    struct ClaimResponse {
+        handle: String,
+    }
+
+    let parsed: ClaimResponse = res.json().context("failed to parse claim response")?;
+    Ok(parsed.handle)
+}
