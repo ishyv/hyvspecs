@@ -94,8 +94,8 @@
 
 		const drives = specs.drives;
 		drives.forEach((d, i) => {
-			const x = (i - (drives.length - 1) / 2) * 1.4;
-			place(driveUnit(theme, profile.parts.storage, d.kind, glow, rng), x, -2.0, d.kind, cap(d.size_mb));
+			const x = (i - (drives.length - 1) / 2) * 1.5;
+			place(driveUnit(theme, profile.parts.storage, d.kind, d.size_mb / 1024, cap(d.size_mb), glow, rng), x, -2.0, d.kind, cap(d.size_mb));
 		});
 
 		place(osBadge(theme, glow, rng), -3.3, -2.0, 'os', specs.machine.os);
@@ -181,6 +181,18 @@
 			host.removeEventListener('pointermove', onMove);
 			ro.disconnect();
 			for (const el of els) el.remove();
+			// free gpu memory: geometries, materials and the procedural textures we minted. the
+			// /dev harness re-keys often, so without this the canvas textures would pile up.
+			scene.traverse((o) => {
+				const mesh = o as { geometry?: { dispose(): void }; material?: MeshStandardMaterial | MeshStandardMaterial[] };
+				mesh.geometry?.dispose();
+				const mats = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
+				for (const mat of mats) {
+					mat.map?.dispose();
+					mat.bumpMap?.dispose();
+					mat.dispose();
+				}
+			});
 			renderer.dispose();
 			renderer.domElement.remove();
 		};
