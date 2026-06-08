@@ -112,8 +112,13 @@
 </script>
 
 <svelte:head>
-	<title>hyv-specs • Share your hardware in 3D</title>
-	<meta name="description" content="Generate gorgeous interactive 3D spec cards from your system specs using a minimal command-line utility." />
+	<title>hyv-specs — share your hardware in 3D</title>
+	<meta name="description" content="Turn your system specs into a gorgeous, interactive 3D card. Run one command, get a link. Built for hardware enthusiasts." />
+	<meta property="og:title" content="hyv-specs — share your hardware in 3D" />
+	<meta property="og:description" content="Turn your system specs into a gorgeous, interactive 3D card. Run one command, get a link. Built for hardware enthusiasts." />
+	<meta property="og:url" content="https://specs.hyvnt.dev" />
+	<meta name="twitter:title" content="hyv-specs — share your hardware in 3D" />
+	<meta name="twitter:description" content="Turn your system specs into a gorgeous, interactive 3D card. Run one command, get a link." />
 </svelte:head>
 
 <div class="landing">

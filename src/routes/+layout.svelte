@@ -5,5 +5,11 @@
 	let { children } = $props();
 </script>
 
-<svelte:head><link rel="icon" href={favicon} /></svelte:head>
+<svelte:head>
+	<link rel="icon" href={favicon} />
+	<meta name="theme-color" content="#08080a" />
+	<meta property="og:site_name" content="hyv-specs" />
+	<meta property="og:type" content="website" />
+	<meta name="twitter:card" content="summary" />
+</svelte:head>
 {@render children()}

@@ -39,3 +39,5 @@ scratch
 .claude
 docs
 .mcp.json
+.vscode 
+.vercel
