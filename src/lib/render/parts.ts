@@ -9,6 +9,7 @@ import {
 	OctahedronGeometry,
 	PlaneGeometry,
 	RepeatWrapping,
+	SRGBColorSpace,
 	TorusGeometry,
 	type Color
 } from 'three';
@@ -684,15 +685,242 @@ function place<T extends Object3D>(o: T, x: number, y: number, z: number): T {
 	return o;
 }
 
-// OS — a small badge plate with a glowing inset tile. lowest billing; carries the os label.
-export function osBadge(theme: Theme, glow: Color, rng: Rng): Part {
+// OS — a small badge plate with a glowing inset tile and a custom hand-drawn logo.
+export function osBadge(theme: Theme, os: string, glow: Color, rng: Rng): Part {
 	const g = new Group();
 	const mat = texturedSurface(theme, glow, 0.3, rng);
 	const inset = accent(theme, glow, 0.5, 1.8);
 	g.add(new Mesh(new BoxGeometry(0.5, 0.5, 0.08), mat));
+	
 	const tile = new Mesh(new BoxGeometry(0.28, 0.28, 0.1), inset);
 	tile.position.z = 0.04;
 	g.add(tile);
+
+	// Generate and apply the hand-drawn kid-crayon logo texture
+	const logoTexture = createOsLogoTexture(os);
+	const logoMat = new MeshStandardMaterial({
+		map: logoTexture,
+		transparent: true,
+		roughness: 0.8,
+		metalness: 0.1
+	});
+	
+	// Overlay a flat plane for the logo on top of the front face of the tile
+	const logoMesh = new Mesh(new PlaneGeometry(0.24, 0.24), logoMat);
+	logoMesh.position.set(0, 0, 0.091);
+	g.add(logoMesh);
+
 	askew(g, rng, moods(theme).damaged);
-	return { object: g, materials: [mat, inset], anchor: anchor(g, 0.32) };
+	return { object: g, materials: [mat, inset, logoMat], anchor: anchor(g, 0.32) };
+}
+
+// Draw a grainy crayon line by rendering tiny overlapping dots
+function drawCrayonLine(
+	ctx: CanvasRenderingContext2D,
+	x1: number,
+	y1: number,
+	x2: number,
+	y2: number,
+	color: string,
+	width: number
+) {
+	ctx.save();
+	ctx.fillStyle = color;
+
+	const dx = x2 - x1;
+	const dy = y2 - y1;
+	const distance = Math.hypot(dx, dy);
+	const steps = Math.max(12, Math.floor(distance / 1.5));
+
+	for (let i = 0; i <= steps; i++) {
+		const t = i / steps;
+		const cx = x1 + dx * t;
+		const cy = y1 + dy * t;
+
+		const dotCount = Math.max(3, Math.floor(width));
+		for (let p = 0; p < dotCount; p++) {
+			const angle = Math.random() * Math.PI * 2;
+			const radius = Math.random() * (width / 2);
+			const px = cx + Math.cos(angle) * radius;
+			const py = cy + Math.sin(angle) * radius;
+			ctx.beginPath();
+			ctx.arc(px, py, 0.5 + Math.random() * 0.8, 0, Math.PI * 2);
+			ctx.fill();
+		}
+	}
+	ctx.restore();
+}
+
+// Draw a filled shape with wobbly child-like borders and a crayon outline
+function drawCrayonPolygon(
+	ctx: CanvasRenderingContext2D,
+	points: Array<[number, number]>,
+	fillColor: string,
+	strokeColor: string,
+	strokeWidth: number
+) {
+	ctx.save();
+	ctx.fillStyle = fillColor;
+	ctx.beginPath();
+	
+	for (let i = 0; i < points.length; i++) {
+		const [x, y] = points[i];
+		const next = points[(i + 1) % points.length];
+		const steps = 6;
+		if (i === 0) {
+			ctx.moveTo(x, y);
+		}
+		for (let s = 1; s <= steps; s++) {
+			const t = s / steps;
+			const jx = x + (next[0] - x) * t + (Math.random() - 0.5) * 1.6;
+			const jy = y + (next[1] - y) * t + (Math.random() - 0.5) * 1.6;
+			ctx.lineTo(jx, jy);
+		}
+	}
+	ctx.fill();
+	ctx.restore();
+
+	for (let i = 0; i < points.length; i++) {
+		const p1 = points[i];
+		const p2 = points[(i + 1) % points.length];
+		drawCrayonLine(ctx, p1[0], p1[1], p2[0], p2[1], strokeColor, strokeWidth);
+	}
+}
+
+// Create a wobbly, kid-styled OS logo on an HTML5 canvas texture
+function createOsLogoTexture(os: string): CanvasTexture {
+	const canvas = document.createElement('canvas');
+	canvas.width = 256;
+	canvas.height = 256;
+	const ctx = canvas.getContext('2d');
+	if (!ctx) return new CanvasTexture(canvas);
+
+	const osLower = os.toLowerCase();
+
+	if (osLower.includes('windows')) {
+		// Windows: classic 4-pane flag style window drawn with crayon
+		const strokeColor = '#1f65ad';
+		const fillColor = 'rgba(125, 195, 244, 0.7)';
+		
+		drawCrayonPolygon(ctx, [
+			[45, 65], [115, 55], [115, 115], [45, 115]
+		], fillColor, strokeColor, 3);
+		
+		drawCrayonPolygon(ctx, [
+			[125, 54], [205, 42], [205, 115], [125, 115]
+		], fillColor, strokeColor, 3);
+		
+		drawCrayonPolygon(ctx, [
+			[45, 125], [115, 125], [115, 185], [45, 175]
+		], fillColor, strokeColor, 3);
+		
+		drawCrayonPolygon(ctx, [
+			[125, 125], [205, 125], [205, 195], [125, 185]
+		], fillColor, strokeColor, 3);
+
+	} else if (osLower.includes('mac') || osLower.includes('darwin') || osLower.includes('os x') || osLower.includes('ios')) {
+		// macOS: retro rainbow Apple logo filled with crayon stripes
+		ctx.save();
+		const applePoints: Array<[number, number]> = [
+			[128, 70], [158, 65], [178, 85], [172, 108], [162, 122], [174, 137],
+			[184, 148], [158, 178], [128, 171], [98, 178], [72, 148], [68, 122],
+			[72, 96], [98, 65]
+		];
+
+		ctx.beginPath();
+		ctx.moveTo(applePoints[0][0], applePoints[0][1]);
+		for (let i = 1; i < applePoints.length; i++) {
+			ctx.lineTo(applePoints[i][0], applePoints[i][1]);
+		}
+		ctx.closePath();
+		ctx.clip();
+
+		const stripes = [
+			{ y1: 50, y2: 83, color: 'rgba(96, 176, 68, 0.75)' },
+			{ y1: 83, y2: 102, color: 'rgba(243, 200, 68, 0.75)' },
+			{ y1: 102, y2: 121, color: 'rgba(243, 156, 18, 0.75)' },
+			{ y1: 121, y2: 140, color: 'rgba(231, 76, 60, 0.75)' },
+			{ y1: 140, y2: 159, color: 'rgba(155, 89, 182, 0.75)' },
+			{ y1: 159, y2: 195, color: 'rgba(52, 152, 219, 0.75)' }
+		];
+
+		for (const s of stripes) {
+			ctx.fillStyle = s.color;
+			for (let y = s.y1; y <= s.y2; y += 2) {
+				ctx.fillRect(50, y, 160, 2);
+			}
+		}
+		ctx.restore();
+
+		drawCrayonPolygon(ctx, [
+			[128, 62], [145, 38], [158, 48], [128, 68]
+		], 'rgba(96, 176, 68, 0.75)', '#427c28', 2);
+
+		const strokeColor = '#3a3a3a';
+		for (let i = 0; i < applePoints.length; i++) {
+			const p1 = applePoints[i];
+			const p2 = applePoints[(i + 1) % applePoints.length];
+			drawCrayonLine(ctx, p1[0], p1[1], p2[0], p2[1], strokeColor, 3);
+		}
+
+	} else if (osLower.includes('linux')) {
+		// Linux: extremely cute wobbly Tux penguin
+		const strokeColor = '#222222';
+		
+		drawCrayonPolygon(ctx, [
+			[80, 185], [105, 185], [95, 208], [75, 203]
+		], 'rgba(243, 156, 18, 0.8)', '#d35400', 2.5);
+		drawCrayonPolygon(ctx, [
+			[151, 185], [176, 185], [181, 203], [161, 208]
+		], 'rgba(243, 156, 18, 0.8)', '#d35400', 2.5);
+
+		drawCrayonPolygon(ctx, [
+			[128, 50], [158, 70], [172, 105], [178, 165], [158, 190], [98, 190], [78, 165], [84, 105], [98, 70]
+		], 'rgba(64, 64, 64, 0.85)', strokeColor, 3);
+
+		drawCrayonPolygon(ctx, [
+			[128, 105], [150, 125], [155, 160], [128, 183], [101, 160], [106, 125]
+		], 'rgba(252, 248, 242, 0.9)', '#888888', 2);
+
+		drawCrayonPolygon(ctx, [
+			[115, 92], [141, 92], [128, 107]
+		], 'rgba(243, 156, 18, 0.9)', '#d35400', 2);
+
+		drawCrayonPolygon(ctx, [
+			[110, 75], [120, 75], [120, 85], [110, 85]
+		], '#ffffff', '#222222', 1.5);
+		drawCrayonLine(ctx, 115, 80, 115, 80, '#222222', 3);
+
+		drawCrayonPolygon(ctx, [
+			[136, 75], [146, 75], [146, 85], [136, 85]
+		], '#ffffff', '#222222', 1.5);
+		drawCrayonLine(ctx, 141, 80, 141, 80, '#222222', 3);
+
+	} else {
+		// Fallback: cute wobbly computer monitor with a smiley face
+		const strokeColor = '#444444';
+		
+		drawCrayonPolygon(ctx, [
+			[110, 160], [146, 160], [156, 195], [100, 195]
+		], 'rgba(120, 120, 120, 0.8)', strokeColor, 2.5);
+
+		drawCrayonPolygon(ctx, [
+			[55, 55], [201, 55], [201, 160], [55, 160]
+		], 'rgba(200, 200, 200, 0.8)', strokeColor, 3);
+
+		drawCrayonPolygon(ctx, [
+			[68, 68], [188, 68], [188, 147], [68, 147]
+		], 'rgba(160, 224, 224, 0.85)', '#317373', 2.5);
+
+		drawCrayonLine(ctx, 100, 95, 100, 95, '#333333', 5);
+		drawCrayonLine(ctx, 156, 95, 156, 95, '#333333', 5);
+		drawCrayonLine(ctx, 105, 118, 116, 128, '#333333', 2.5);
+		drawCrayonLine(ctx, 116, 128, 140, 128, '#333333', 2.5);
+		drawCrayonLine(ctx, 140, 128, 151, 118, '#333333', 2.5);
+	}
+
+	const texture = new CanvasTexture(canvas);
+	texture.colorSpace = SRGBColorSpace;
+	texture.needsUpdate = true;
+	return texture;
 }

@@ -108,7 +108,7 @@
 			place(driveUnit(theme, profile.parts.storage, d.kind, d.size_mb / 1024, value, glow, rng), x, -2.0, name, value);
 		});
 
-		place(osBadge(theme, glow, rng), -3.3, -2.0, 'os', specs.machine.os);
+		place(osBadge(theme, specs.machine.os, glow, rng), -3.3, -2.0, 'os', specs.machine.os);
 
 		// fit pass: centre content on the rig origin, scale to the frustum, so any part count
 		// obeys the single-viewport law. recomputed on resize.
