@@ -26,12 +26,16 @@ vite.config.ts.timestamp-*
 local.db
 local.db-*
 
+# Rust CLI build artifacts
+hyvspecs-cli/target
+
 .vscode
 bun.lock
-
-# the rust cli is its own git repo, versioned separately
-hyvspecs-cli
 
 CLAUDE.md
 AGENTS.md
 .vercel
+scratch
+.claude
+docs
+.mcp.json

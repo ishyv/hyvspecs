@@ -1,0 +1,121 @@
+name: CLI Release
+
+# Triggers on any tag of the form cli-vX.Y.Z (e.g. cli-v1.0.0).
+# Keeps CLI versioning completely separate from web deploys.
+on:
+  push:
+    tags:
+      - 'cli-v*'
+
+permissions:
+  contents: write  # needed to create the GitHub Release and upload assets
+
+jobs:
+  build:
+    name: Build — ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: hyvspecs.exe
+
+          - name: macOS x64
+            os: macos-latest
+            target: x86_64-apple-darwin
+            artifact: hyvspecs
+
+          - name: macOS Apple Silicon
+            os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: hyvspecs
+
+          - name: Linux x64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: hyvspecs
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # Cache ~/.cargo/registry and the build target dir to speed up
+      # repeat builds significantly (Rust deps rarely change between runs).
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            hyvspecs-cli/target
+          key: cargo-${{ matrix.target }}-${{ hashFiles('hyvspecs-cli/Cargo.lock') }}
+          restore-keys: cargo-${{ matrix.target }}-
+
+      - name: Build release binary
+        working-directory: hyvspecs-cli
+        run: cargo build --release --target ${{ matrix.target }}
+
+      # Rename binary to include the target triple so all platforms can be
+      # uploaded to the same release without name collisions.
+      - name: Stage artifact
+        shell: bash
+        run: |
+          SRC="hyvspecs-cli/target/${{ matrix.target }}/release/${{ matrix.artifact }}"
+          EXT="${{ matrix.artifact == 'hyvspecs.exe' && '.exe' || '' }}"
+          DEST="hyvspecs-${{ matrix.target }}${EXT}"
+          cp "$SRC" "$DEST"
+          echo "ASSET=$DEST" >> "$GITHUB_ENV"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ASSET }}
+          path: ${{ env.ASSET }}
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "hyvspecs CLI ${{ github.ref_name }}"
+          body: |
+            ## Installation
+
+            Download the binary for your platform below and put it somewhere on your `PATH`.
+
+            | Platform | File |
+            |---|---|
+            | Windows x64 | `hyvspecs-x86_64-pc-windows-msvc.exe` |
+            | macOS x64 | `hyvspecs-x86_64-apple-darwin` |
+            | macOS Apple Silicon | `hyvspecs-aarch64-apple-darwin` |
+            | Linux x64 | `hyvspecs-x86_64-unknown-linux-gnu` |
+
+            Then run:
+            ```
+            hyvspecs
+            ```
+          files: dist/*
+          draft: false
+          prerelease: false
