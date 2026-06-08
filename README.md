@@ -107,6 +107,27 @@ every card comes with a locally stored edit token so only you can update or dele
 
 ---
 
+## development
+
+if you want to build or run the project locally:
+
+### ⚙️ prerequisites
+
+- 🦀 **Rust** (1.85+ stable) — to compile and run the CLI binary
+- ⚡ **Node.js / Bun** (20+ / latest) — to run the SvelteKit frontend dev server
+
+### 🛠️ running the cli locally
+
+you don't need to `cd` into the CLI subfolder. run it directly from the root:
+
+```bash
+npm run cli -- showcase
+```
+
+this compiles and runs the Rust tool on the fly, forwarding any arguments after the `--` separator.
+
+---
+
 ## license
 
-[MIT](hyvspecs-cli/LICENSE)
+[MIT](LICENSE)
