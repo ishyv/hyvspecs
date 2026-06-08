@@ -4,6 +4,26 @@ how the card decides what it looks like. this sits under [PHILOSOPHY.md](PHILOSO
 and above the renderer: philosophy says *why*, this says *what the rules are*, the
 three.js code says *how*.
 
+## legibility is the first law (supersedes pure abstraction)
+
+a spec card a stranger cannot read is a failed spec card. the link gets shared to people
+with zero context; they must understand it at a glance — which component is which, how
+many, how much. so:
+
+- **components are recognizable hardware, not abstract solids.** the cpu reads as a chip,
+  the gpu as a graphics card with fans, ram as countable sticks, storage as countable
+  drive units. silhouette alone should point at the right category.
+- **every part is labeled + quantified.** a pinned label carries name + value
+  (`gpu · rtx 4090 · 24gb`, `nvme · 2tb`). counts are explicit: three drives render as
+  three labeled units, never an ambiguous cluster.
+- **the tier system is the *finish*, not the *form*.** the score/material worlds below
+  (rust→divine) decide how the gear is forged and lit — its rarity glow — but never what
+  it *is*. a legendary 4090 and a humble 1050 are both unmistakably graphics cards; the
+  legendary one just burns hotter and cleaner.
+
+this revises the earlier abstract "shape of power" / "node" direction: the abstraction
+was beautiful but illegible, and legibility wins where they conflict.
+
 ## one number drives everything
 
 every visual decision flows from the **power score** (`src/lib/score.ts`). it is not a

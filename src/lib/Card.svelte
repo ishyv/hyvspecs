@@ -5,26 +5,6 @@
 
 	let { envelope }: { envelope: Envelope } = $props();
 	const profile = $derived(scoreEnvelope(envelope));
-
-	// mb → the shortest human unit. specs text is the quietest layer of the card, so it stays
-	// terse: "2 tb", "32 gb".
-	function cap(mb: number): string {
-		if (mb >= 1024 * 1024) return +(mb / 1048576).toFixed(1) + ' tb';
-		if (mb >= 1024) return Math.round(mb / 1024) + ' gb';
-		return mb + ' mb';
-	}
-
-	const s = $derived(envelope.specs);
-	const gpu = $derived(s.gpus[0]?.model ?? 'no gpu');
-	const moreGpu = $derived(s.gpus.length > 1 ? ` +${s.gpus.length - 1}` : '');
-	// the readout mirrors the rig's parts, in the same left-to-right order as the scene.
-	const readout = $derived([
-		{ k: 'cpu', v: s.cpu.model },
-		{ k: 'gpu', v: gpu + moreGpu },
-		{ k: 'ram', v: cap(s.ram.total_mb) },
-		{ k: 'disk', v: cap(envelope.derived.total_storage_mb) },
-		{ k: 'os', v: s.machine.os }
-	]);
 	const accent = $derived(profile.visual.heat > 0.5 ? '#d6a85a' : '#2f9e8f');
 </script>
 
@@ -45,12 +25,6 @@
 	{#if envelope.label}
 		<div class="label">{envelope.label}</div>
 	{/if}
-
-	<dl class="readout">
-		{#each readout as r (r.k)}
-			<div><dt>{r.k}</dt><dd>{r.v}</dd></div>
-		{/each}
-	</dl>
 </div>
 
 <style>
@@ -64,8 +38,7 @@
 		color: #c7ccd1;
 	}
 	header,
-	.label,
-	.readout {
+	.label {
 		position: absolute;
 		z-index: 2;
 		pointer-events: none;
@@ -121,30 +94,5 @@
 		letter-spacing: 0.04em;
 		color: #8a9097;
 		text-transform: lowercase;
-	}
-	.readout {
-		bottom: 1.5rem;
-		left: 1.7rem;
-		right: 1.7rem;
-		margin: 0;
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.4rem 1.6rem;
-		font-size: 0.72rem;
-	}
-	.readout div {
-		display: flex;
-		gap: 0.55rem;
-		align-items: baseline;
-	}
-	.readout dt {
-		text-transform: uppercase;
-		letter-spacing: 0.12em;
-		color: #6a7178;
-	}
-	.readout dd {
-		margin: 0;
-		color: #c7ccd1;
-		letter-spacing: 0.02em;
 	}
 </style>

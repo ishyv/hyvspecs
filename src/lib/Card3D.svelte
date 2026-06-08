@@ -6,6 +6,7 @@
 		Group,
 		HemisphereLight,
 		MeshStandardMaterial,
+		Object3D,
 		PerspectiveCamera,
 		PointLight,
 		Scene,
@@ -14,17 +15,18 @@
 	} from 'three';
 	import type { Envelope } from '$lib/envelope';
 	import { scoreEnvelope } from '$lib/score';
+	import { cap } from '$lib/format';
 	import { resolveTheme, glowColor } from '$lib/render/themes';
-	import { cpuCore, gpuCore, type Core } from '$lib/render/cores';
-	import { ramNode, storageNode, osNode, trace } from '$lib/render/nodes';
+	import { cpuChip, gpuCard, ramSticks, driveUnit, osBadge, type Part } from '$lib/render/parts';
 	import { buildStage } from '$lib/render/stage';
 	import { makeRng } from '$lib/render/rng';
 
 	let { envelope }: { envelope: Envelope } = $props();
 
-	// the scene is built once in onMount; to show a different rig the parent re-keys this
-	// component (a card is a fixed object, not reactive state).
+	// built once in onMount; the parent re-keys to show a different rig (a card is a fixed
+	// object, not reactive state).
 	let host: HTMLDivElement;
+	let labelLayer: HTMLDivElement;
 	const FOV = 45;
 	const CAM_Z = 9;
 	const DEG = Math.PI / 180;
@@ -44,8 +46,6 @@
 		const camera = new PerspectiveCamera(FOV, 1, 0.1, 100);
 		camera.position.set(0, 0, CAM_Z);
 
-		// light is the world's, not white: ambient floor + a glow-tinted rim so the metal
-		// reads its tier. metalness needs something to reflect, hence the hemisphere fill.
 		scene.add(new AmbientLight(0xffffff, theme.ambient));
 		scene.add(new HemisphereLight(0xbfc6cc, 0x0a0a0c, 0.4 + profile.e * 0.4));
 		const key = new PointLight(0xffffff, 30 + profile.e * 40);
@@ -56,54 +56,45 @@
 
 		const stage = buildStage(scene, glow, profile.visual.energy, rng);
 
-		// build every block, then place it. positions are authored in a loose space and the
-		// whole thing is scaled to fit afterwards, so node count never breaks the frame.
+		// assemble the loadout, then place each piece. a label is pinned to every part's anchor
+		// so name + value travel with it. positions are loose; a fit pass scales to frame after.
 		const content = new Group();
-		const cores: Core[] = [];
+		const spinners: Array<(t: number) => void> = [];
 		const breath: MeshStandardMaterial[] = [];
+		const labels: Array<{ anchor: Object3D; name: string; value: string }> = [];
 
-		const cpu = cpuCore(theme, profile.parts.cpu, glow, rng);
-		const gpu = gpuCore(theme, profile.parts.gpu, glow, rng);
-		const cpuAt = new Vector3(-2.6, 0.8, 0);
-		const gpuAt = new Vector3(2.6, 0.8, 0);
-		cpu.object.position.copy(cpuAt);
-		gpu.object.position.copy(gpuAt);
-		cores.push(cpu, gpu);
+		const place = (part: Part, x: number, y: number, name: string, value: string) => {
+			part.object.position.set(x, y, 0);
+			content.add(part.object);
+			breath.push(...part.materials);
+			if (part.spin) spinners.push(part.spin);
+			labels.push({ anchor: part.anchor, name, value });
+		};
 
-		const ram = ramNode(theme, profile.parts.ram, specs.ram.modules.map((m) => m.size_mb), glow, rng);
-		const storage = storageNode(
-			theme,
-			profile.parts.storage,
-			specs.drives.map((d) => ({ sizeMb: d.size_mb, kind: d.kind })),
-			glow,
-			rng
-		);
-		const os = osNode(theme, glow, rng);
-		const ramAt = new Vector3(-3.0, -1.9, 0);
-		const storageAt = new Vector3(0, -2.2, 0);
-		const osAt = new Vector3(3.0, -1.9, 0);
-		ram.object.position.copy(ramAt);
-		storage.object.position.copy(storageAt);
-		os.object.position.copy(osAt);
+		const gpu = specs.gpus[0];
+		const gpuValue = gpu ? gpu.model + (gpu.vram_mb ? ' · ' + cap(gpu.vram_mb) : '') : 'no gpu';
+		place(gpuCard(theme, profile.parts.gpu, glow, rng), 0, 1.1, 'gpu', gpuValue + (specs.gpus.length > 1 ? ` +${specs.gpus.length - 1}` : ''));
+		place(cpuChip(theme, profile.parts.cpu, glow, rng), -3.3, 0.5, 'cpu', specs.cpu.model);
 
-		// the circuit: secondary nodes wired up to the heroes, and the two heroes linked. the
-		// connective tissue that makes the parts read as one powered figure.
-		const d = profile.visual.density;
-		content.add(
-			trace(cpuAt, gpuAt, glow, d),
-			trace(ramAt, cpuAt, glow, d),
-			trace(storageAt, cpuAt, glow, d),
-			trace(storageAt, gpuAt, glow, d),
-			trace(osAt, gpuAt, glow, d)
+		const modules = specs.ram.modules.map((m) => m.size_mb);
+		place(
+			ramSticks(theme, profile.parts.ram, modules, glow, rng),
+			3.3,
+			0.6,
+			'ram',
+			cap(specs.ram.total_mb) + (modules.length ? ` · ${modules.length}×` : '')
 		);
 
-		for (const b of [cpu, gpu, ram, storage, os]) {
-			content.add(b.object);
-			breath.push(...b.materials);
-		}
+		const drives = specs.drives;
+		drives.forEach((d, i) => {
+			const x = (i - (drives.length - 1) / 2) * 1.4;
+			place(driveUnit(theme, profile.parts.storage, d.kind, glow, rng), x, -2.0, d.kind, cap(d.size_mb));
+		});
 
-		// fit pass: centre the content on the rig origin and scale it to the frustum, so the
-		// single-viewport law holds for one drive or seven. recomputed on resize.
+		place(osBadge(theme, glow, rng), -3.3, -2.0, 'os', specs.machine.os);
+
+		// fit pass: centre content on the rig origin, scale to the frustum, so any part count
+		// obeys the single-viewport law. recomputed on resize.
 		const box = new Box3().setFromObject(content);
 		const size = box.getSize(new Vector3());
 		const center = box.getCenter(new Vector3());
@@ -114,38 +105,56 @@
 		scene.add(rig);
 		const hx = size.x / 2;
 		const hy = size.y / 2;
-
 		const fit = (aspect: number) => {
 			const halfH = Math.tan((FOV * DEG) / 2) * CAM_Z;
 			const halfW = halfH * aspect;
-			rig.scale.setScalar(Math.min((halfW * 0.82) / hx, (halfH * 0.74) / hy));
+			rig.scale.setScalar(Math.min((halfW * 0.84) / hx, (halfH * 0.7) / hy));
 		};
 
-		// idle: core spin + an emissive breath whose rate/depth is the power's energy, plus a
-		// slow particle drift.
+		// one html label per part, projected from its 3d anchor each frame so it tracks parallax.
+		const els = labels.map((l) => {
+			const el = document.createElement('div');
+			el.className = 'plabel';
+			el.innerHTML = `<span class="ln">${l.name}</span><span class="lv">${l.value}</span>`;
+			labelLayer.appendChild(el);
+			return el;
+		});
+		const tmp = new Vector3();
+		const projectLabels = (w: number, h: number) => {
+			for (let i = 0; i < labels.length; i++) {
+				labels[i].anchor.getWorldPosition(tmp).project(camera);
+				const behind = tmp.z > 1;
+				els[i].style.opacity = behind ? '0' : '1';
+				els[i].style.transform = `translate(-50%, -100%) translate(${(tmp.x * 0.5 + 0.5) * w}px, ${(-tmp.y * 0.5 + 0.5) * h}px)`;
+			}
+		};
+
+		// idle: fans spin, an emissive breath at the power's energy, slow particle drift.
 		const TAU = Math.PI * 2;
-		const pulseAmt = 0.15 + profile.visual.energy * 0.5;
+		const pulseAmt = 0.12 + profile.visual.energy * 0.4;
 		const base = breath.map((m) => m.emissiveIntensity);
 		const start = performance.now();
 		let raf = 0;
 		const tick = () => {
 			const t = (performance.now() - start) / 1000;
 			const b = 1 + pulseAmt * Math.sin(t * profile.visual.pulseHz * TAU);
-			for (const c of cores) c.spin(t);
+			for (const s of spinners) s(t);
 			breath.forEach((m, i) => (m.emissiveIntensity = base[i] * b));
 			stage.particles.rotation.y = t * 0.02;
 			renderer.render(scene, camera);
+			projectLabels(host.clientWidth, host.clientHeight);
 			raf = requestAnimationFrame(tick);
 		};
 		tick();
 
-		// pointer parallax — the plate is an object in space, not a flat image.
+		// pointer parallax — the loadout is an object in space, not a flat image. kept gentle so
+		// the labels stay readable.
 		const onMove = (e: PointerEvent) => {
 			const r = host.getBoundingClientRect();
 			const nx = ((e.clientX - r.left) / r.width) * 2 - 1;
 			const ny = ((e.clientY - r.top) / r.height) * 2 - 1;
-			rig.rotation.y = nx * 0.28;
-			rig.rotation.x = ny * 0.2;
+			rig.rotation.y = nx * 0.18;
+			rig.rotation.x = ny * 0.12;
 		};
 		host.addEventListener('pointermove', onMove);
 
@@ -164,6 +173,7 @@
 			cancelAnimationFrame(raf);
 			host.removeEventListener('pointermove', onMove);
 			ro.disconnect();
+			for (const el of els) el.remove();
 			renderer.dispose();
 			renderer.domElement.remove();
 		};
@@ -172,6 +182,7 @@
 
 <div class="card3d">
 	<div bind:this={host} class="stage"></div>
+	<div bind:this={labelLayer} class="labels"></div>
 	<div class="vignette"></div>
 </div>
 
@@ -189,11 +200,42 @@
 	.stage :global(canvas) {
 		display: block;
 	}
-	/* darkens the corners so the eye stays on the rig and edges fall into the near-black. */
+	.labels {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		overflow: hidden;
+	}
+	/* a part label: dim category over a bright value, pinned above the part's anchor. */
+	.labels :global(.plabel) {
+		position: absolute;
+		top: 0;
+		left: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.05rem;
+		font-family: 'IBM Plex Mono', ui-monospace, monospace;
+		line-height: 1.1;
+		white-space: nowrap;
+		text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+		transition: opacity 0.2s;
+	}
+	.labels :global(.plabel .ln) {
+		font-size: 0.6rem;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		color: #7c828a;
+	}
+	.labels :global(.plabel .lv) {
+		font-size: 0.82rem;
+		letter-spacing: 0.02em;
+		color: #e4e7ea;
+	}
 	.vignette {
 		position: absolute;
 		inset: 0;
 		pointer-events: none;
-		background: radial-gradient(ellipse at center, transparent 45%, rgba(4, 4, 6, 0.75) 100%);
+		background: radial-gradient(ellipse at center, transparent 50%, rgba(4, 4, 6, 0.7) 100%);
 	}
 </style>
