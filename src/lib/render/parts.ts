@@ -110,7 +110,125 @@ export function cpuChip(theme: Theme, magnitude: number, glow: Color, rng: Rng):
 	const span = 1.1 + magnitude * 0.25;
 	g.add(new Mesh(new BoxGeometry(span, span, 0.12), body));
 
+	const cpuStyle = Math.floor(range(rng, 0, 3));
 	let spin: ((t: number) => void) | undefined;
+
+	if (cpuStyle === 0) {
+		// Classic / Tabbed IHS
+		const ihs = new Mesh(new BoxGeometry(span * 0.74, span * 0.74, 0.16), ihsMat);
+		ihs.position.z = 0.13;
+		g.add(ihs);
+
+		// Side tabs / ears representing mounting points
+		const earMat = surface(theme, glow, magnitude);
+		mats.push(earMat);
+		const earL = new Mesh(new BoxGeometry(span * 0.12, span * 0.25, 0.06), earMat);
+		earL.position.set(-span * 0.43, 0, 0.08);
+		const earR = new Mesh(new BoxGeometry(span * 0.12, span * 0.25, 0.06), earMat);
+		earR.position.set(span * 0.43, 0, 0.08);
+		g.add(earL, earR);
+
+		// Center groove lines (cross lines)
+		const groove = DARK();
+		const grooveV = new Mesh(new BoxGeometry(0.02, span * 0.5, 0.02), groove);
+		grooveV.position.set(0, 0, 0.21);
+		const grooveH = new Mesh(new BoxGeometry(span * 0.5, 0.02, 0.02), groove);
+		grooveH.position.set(0, 0, 0.21);
+		g.add(grooveV, grooveH);
+
+		// chiplet grid recessed into the spreader
+		const n = magnitude > 0.66 ? 3 : magnitude > 0.33 ? 2 : 1;
+		const cell = (span * 0.62) / n;
+		for (let r = 0; r < n; r++) {
+			for (let c = 0; c < n; c++) {
+				const die = new Mesh(new BoxGeometry(cell * 0.5, cell * 0.5, 0.02), groove);
+				die.position.set((c - (n - 1) / 2) * cell, (r - (n - 1) / 2) * cell, 0.22);
+				g.add(die);
+			}
+		}
+	} else if (cpuStyle === 1) {
+		// Exposed Direct-Die (no metal IHS cover)
+		const dieMat = new MeshStandardMaterial({
+			color: theme.name === 'divine' ? 0xd8bd82 : 0x1b2030,
+			roughness: 0.12,
+			metalness: 0.95,
+			emissive: glow,
+			emissiveIntensity: theme.emissive * 0.2
+		});
+		mats.push(dieMat);
+
+		// Central I/O Die (larger)
+		const iod = new Mesh(new BoxGeometry(span * 0.3, span * 0.2, 0.06), dieMat);
+		iod.position.set(0, -span * 0.1, 0.09);
+		g.add(iod);
+
+		// CCD Core Dies (smaller, 1 or 2 depending on performance)
+		const ccdCount = magnitude > 0.5 ? 2 : 1;
+		const ccdSize = span * 0.18;
+		for (let i = 0; i < ccdCount; i++) {
+			const ccd = new Mesh(new BoxGeometry(ccdSize * 1.2, ccdSize, 0.06), dieMat);
+			const cx = ccdCount === 1 ? 0 : (i === 0 ? -span * 0.18 : span * 0.18);
+			ccd.position.set(cx, span * 0.18, 0.09);
+			g.add(ccd);
+		}
+
+		// SMD Capacitors (tiny silver/grey blocks)
+		const capMat = new MeshStandardMaterial({ color: 0x8a9097, roughness: 0.5, metalness: 0.8 });
+		mats.push(capMat);
+		const capPositions = [
+			[-span * 0.25, -span * 0.22],
+			[span * 0.25, -span * 0.22],
+			[-span * 0.28, 0],
+			[span * 0.28, 0],
+			[-span * 0.08, span * 0.32],
+			[span * 0.08, span * 0.32]
+		];
+		capPositions.forEach(([cx, cy]) => {
+			const smd = new Mesh(new BoxGeometry(0.04, 0.04, 0.05), capMat);
+			smd.position.set(cx, cy, 0.085);
+			g.add(smd);
+		});
+	} else {
+		// Liquid Loop Pump Block / AIO Waterblock
+		const block = new Mesh(new BoxGeometry(span * 0.7, span * 0.7, 0.22), ihsMat);
+		block.position.z = 0.16;
+		g.add(block);
+
+		// Circular center window/cap
+		const centerMat = new MeshStandardMaterial({ color: 0x0c0c0e, roughness: 0.4, metalness: 0.7 });
+		mats.push(centerMat);
+		const cap = new Mesh(new CylinderGeometry(span * 0.22, span * 0.22, 0.04, 16), centerMat);
+		cap.rotation.x = Math.PI / 2;
+		cap.position.set(0, 0, 0.28);
+		g.add(cap);
+
+		// Glowing logo or line inside the cap
+		const glowRingMat = accent(theme, glow, magnitude, 2.0);
+		mats.push(glowRingMat);
+		const glowRing = new Mesh(new TorusGeometry(span * 0.14, 0.02, 6, 16), glowRingMat);
+		glowRing.position.set(0, 0, 0.31);
+		g.add(glowRing);
+
+		// Two coolant fittings (cylinders) pointing upwards/outwards
+		const fittingMat = new MeshStandardMaterial({ color: 0x2e3035, roughness: 0.5, metalness: 0.8 });
+		mats.push(fittingMat);
+		for (let i = 0; i < 2; i++) {
+			const fitX = (i === 0 ? -1 : 1) * span * 0.22;
+			const fitY = span * 0.22;
+			
+			// Fitting base
+			const fBase = new Mesh(new CylinderGeometry(0.05, 0.05, 0.08, 8), fittingMat);
+			fBase.rotation.x = Math.PI / 2;
+			fBase.position.set(fitX, fitY, 0.24);
+			g.add(fBase);
+
+			// Fitting collar
+			const fCol = new Mesh(new CylinderGeometry(0.04, 0.04, 0.12, 8), fittingMat);
+			fCol.rotation.x = Math.PI / 2;
+			fCol.position.set(fitX, fitY, 0.3);
+			g.add(fCol);
+		}
+	}
 
 	if (m.ornate) {
 		// Divine: Levitating crystal octahedron that spins and bobs in 3D space
@@ -130,19 +248,15 @@ export function cpuChip(theme: Theme, magnitude: number, glow: Color, rng: Rng):
 		spin = (t) => {
 			crystal.rotation.y = t * 1.5;
 			crystal.rotation.x = t * 0.8;
-			crystal.position.z = 0.35 + Math.sin(t * 3.5) * 0.08;
+			crystal.position.z = (cpuStyle === 2 ? 0.46 : 0.35) + Math.sin(t * 3.5) * 0.08;
 			border.rotation.z = Math.PI / 4 - t * 0.4;
 		};
 	} else if (m.alloy) {
 		// Alloy (Enthusiast): CPU spreader topped with rotating energy torus core
-		const ihs = new Mesh(new BoxGeometry(span * 0.74, span * 0.74, 0.16), ihsMat);
-		ihs.position.z = 0.13;
-		g.add(ihs);
-
 		const ringMat = accent(theme, glow, magnitude, 2.2);
 		mats.push(ringMat);
 		const energyRing = new Mesh(new TorusGeometry(span * 0.28, 0.04, 8, 24), ringMat);
-		energyRing.position.set(0, 0, 0.23);
+		energyRing.position.set(0, 0, cpuStyle === 2 ? 0.35 : cpuStyle === 1 ? 0.18 : 0.23);
 		g.add(energyRing);
 
 		spin = (t) => {
@@ -157,38 +271,31 @@ export function cpuChip(theme: Theme, magnitude: number, glow: Color, rng: Rng):
 		const finSpacing = (span * 0.74) / (finCount - 1);
 		for (let i = 0; i < finCount; i++) {
 			const x = -span * 0.37 + i * finSpacing;
-			const finMesh = new Mesh(new BoxGeometry(0.025, span * 0.74, 0.25), copperMat);
-			finMesh.position.set(x, 0, 0.18);
+			let fHeight = 0.25;
+			let fZ = 0.18;
+			if (cpuStyle === 1) {
+				if (i > 1 && i < 4) continue; // skip center fins to expose dies
+				fHeight = 0.14;
+				fZ = 0.14;
+			} else if (cpuStyle === 2) {
+				fHeight = 0.12;
+				fZ = 0.3;
+			}
+			const finMesh = new Mesh(new BoxGeometry(0.025, span * 0.74, fHeight), copperMat);
+			finMesh.position.set(x, 0, fZ);
 			g.add(finMesh);
 		}
 	} else {
-		// Standard / Potato: Industrial CPU heat spreader
-		const ihs = new Mesh(new BoxGeometry(span * 0.74, span * 0.74, 0.16), ihsMat);
-		ihs.position.z = 0.13;
-		g.add(ihs);
-
-		// chiplet grid recessed into the spreader
-		const groove = DARK();
-		const n = magnitude > 0.66 ? 3 : magnitude > 0.33 ? 2 : 1;
-		const cell = (span * 0.62) / n;
-		for (let r = 0; r < n; r++) {
-			for (let c = 0; c < n; c++) {
-				const die = new Mesh(new BoxGeometry(cell * 0.78, cell * 0.78, 0.03), groove);
-				die.position.set((c - (n - 1) / 2) * cell, (r - (n - 1) / 2) * cell, 0.22);
-				g.add(die);
-			}
-		}
-
 		if (m.damaged) {
 			// Potato: Hand-wrapped copper wire loop coils wrapped around the CPU
 			const wireMat = new MeshStandardMaterial({ color: 0xb87333, roughness: 0.8, metalness: 0.6 });
 			mats.push(wireMat);
 			const wire1 = new Mesh(new TorusGeometry(span * 0.22, 0.032, 4, 12, Math.PI), wireMat);
 			wire1.rotation.y = Math.PI / 2;
-			wire1.position.set(-span * 0.2, 0, 0.1);
+			wire1.position.set(-span * 0.2, 0, cpuStyle === 2 ? 0.22 : 0.1);
 			const wire2 = new Mesh(new TorusGeometry(span * 0.18, 0.032, 4, 12, Math.PI), wireMat);
 			wire2.rotation.y = -Math.PI / 2;
-			wire2.position.set(span * 0.2, span * 0.08, 0.1);
+			wire2.position.set(span * 0.2, span * 0.08, cpuStyle === 2 ? 0.22 : 0.1);
 			g.add(wire1, wire2);
 		}
 	}
@@ -309,6 +416,8 @@ export function gpuCard(theme: Theme, magnitude: number, glow: Color, rng: Rng):
 	back.position.set(0, 0, -0.08);
 	g.add(back);
 
+	const gpuStyle = Math.floor(range(rng, 0, 3));
+
 	if (m.ornate) {
 		// Divine: minimal crystal frame holding the gyroscopic neon rings
 		const frameMat = accent(theme, glow, magnitude, 2.2);
@@ -319,9 +428,48 @@ export function gpuCard(theme: Theme, magnitude: number, glow: Color, rng: Rng):
 		bottomBar.position.set(0, -0.4, 0.2);
 		g.add(topBar, bottomBar);
 	} else {
-		const shroud = new Mesh(new BoxGeometry(w * 0.96, 0.82, 0.42), body);
-		shroud.position.z = 0.26;
-		g.add(shroud);
+		if (gpuStyle === 2) {
+			// Waterblock cover
+			const shroud = new Mesh(new BoxGeometry(w * 0.96, 0.82, 0.24), body);
+			shroud.position.z = 0.17;
+			g.add(shroud);
+
+			// Acrylic Window
+			const windowMat = new MeshStandardMaterial({ color: 0x0a151b, roughness: 0.15, metalness: 0.8 });
+			mats.push(windowMat);
+			const windowMesh = new Mesh(new BoxGeometry(w * 0.5, 0.48, 0.04), windowMat);
+			windowMesh.position.set(0, 0, 0.28);
+			g.add(windowMesh);
+
+			// Coolant tube paths
+			const tubeMat = accent(theme, glow, magnitude, 2.2);
+			mats.push(tubeMat);
+			const path1 = new Mesh(new BoxGeometry(w * 0.44, 0.04, 0.02), tubeMat);
+			path1.position.set(0, 0.12, 0.3);
+			const path2 = new Mesh(new BoxGeometry(w * 0.44, 0.04, 0.02), tubeMat);
+			path2.position.set(0, -0.12, 0.3);
+			const conn = new Mesh(new BoxGeometry(0.04, 0.24, 0.02), tubeMat);
+			conn.position.set(-w * 0.2, 0, 0.3);
+			g.add(path1, path2, conn);
+
+			// Coolant fittings
+			const fitMat = new MeshStandardMaterial({ color: 0x6a7178, roughness: 0.4, metalness: 0.85 });
+			mats.push(fitMat);
+			for (let i = 0; i < 2; i++) {
+				const fx = -w * 0.15 + i * 0.25;
+				const fy = 0.44;
+				const fz = 0.17;
+				const baseFit = new Mesh(new CylinderGeometry(0.045, 0.045, 0.08, 8), fitMat);
+				baseFit.rotation.x = Math.PI / 2;
+				baseFit.position.set(fx, fy, fz);
+				g.add(baseFit);
+			}
+		} else {
+			// Shroud for Axial / Blower
+			const shroud = new Mesh(new BoxGeometry(w * 0.96, 0.82, 0.42), body);
+			shroud.position.z = 0.26;
+			g.add(shroud);
+		}
 	}
 
 	const fingerMat = accent(theme, glow, magnitude, 1.3);
@@ -336,15 +484,15 @@ export function gpuCard(theme: Theme, magnitude: number, glow: Color, rng: Rng):
 	g.add(bracket);
 
 	const vent = DARK();
-	if (m.iron) {
-		// Iron: Left vents on the blower style card
+	if (m.iron || gpuStyle === 1) {
+		// Iron / Blower: Left vents on shroud
 		for (let i = 0; i < 4; i++) {
 			const v = new Mesh(new BoxGeometry(0.06, 0.45, 0.02), vent);
 			v.position.set(-w * 0.22 + i * 0.12, 0, 0.48);
 			g.add(v);
 		}
-	} else if (!m.ornate) {
-		// Standard vents
+	} else if (!m.ornate && gpuStyle === 0) {
+		// Standard axial card vents
 		for (let i = 0; i < 6; i++) {
 			const v = new Mesh(new BoxGeometry(0.04, 0.5, 0.02), vent);
 			v.position.set(-w * 0.3 + i * ((w * 0.6) / 5), 0, 0.48);
@@ -374,25 +522,52 @@ export function gpuCard(theme: Theme, magnitude: number, glow: Color, rng: Rng):
 		g.add(logo);
 	}
 
-	let count = magnitude > 0.6 ? 3 : 2;
-	if (m.damaged) count = 1;
-	if (m.iron) count = 1;
-	if (m.ornate) count = 2; // Dual neon rings
-
-	const r = (w * 0.96) / count / 2.25;
+	// Fan Setup
 	const spins: Array<(t: number) => void> = [];
-	for (let i = 0; i < count; i++) {
-		const f = fan(r, body, acc, m.damaged, m.ornate, m.iron);
-		let fx = (i - (count - 1) / 2) * ((w * 0.96) / count);
-		let fy = 0;
-		let fz = m.ornate ? 0.2 : 0.48;
-		if (m.iron) {
-			fx = w * 0.22;
-			fz = 0.36;
+	
+	if (gpuStyle === 2 && !m.ornate) {
+		// Liquid-Cooled spinning indicator wheel
+		const propGroup = new Group();
+		propGroup.position.set(w * 0.12, 0, 0.32);
+		
+		const fitMat = new MeshStandardMaterial({ color: 0x6a7178, roughness: 0.4, metalness: 0.85 });
+		mats.push(fitMat);
+		const propHub = new Mesh(new CylinderGeometry(0.025, 0.025, 0.04, 8), fitMat);
+		propHub.rotation.x = Math.PI / 2;
+		propGroup.add(propHub);
+
+		// Blades / spokes of the indicator wheel
+		const bladeMat = accent(theme, glow, magnitude, 1.8);
+		mats.push(bladeMat);
+		const propBlade1 = new Mesh(new BoxGeometry(0.1, 0.02, 0.02), bladeMat);
+		const propBlade2 = new Mesh(new BoxGeometry(0.02, 0.1, 0.02), bladeMat);
+		propGroup.add(propBlade1, propBlade2);
+		g.add(propGroup);
+
+		spins.push((t) => {
+			propGroup.rotation.z = t * 4.0;
+		});
+	} else {
+		// Standard Fans (axial / blower)
+		let count = magnitude > 0.6 ? 3 : 2;
+		if (m.damaged) count = 1;
+		if (m.iron || gpuStyle === 1) count = 1;
+		if (m.ornate) count = 2; // Dual neon rings
+
+		const r = (w * 0.96) / count / 2.25;
+		for (let i = 0; i < count; i++) {
+			const f = fan(r, body, acc, m.damaged, m.ornate, m.iron || gpuStyle === 1);
+			let fx = (i - (count - 1) / 2) * ((w * 0.96) / count);
+			let fy = 0;
+			let fz = m.ornate ? 0.2 : 0.48;
+			if (m.iron || gpuStyle === 1) {
+				fx = w * 0.22;
+				fz = 0.36;
+			}
+			f.group.position.set(fx, fy, fz);
+			g.add(f.group);
+			spins.push(f.spin);
 		}
-		f.group.position.set(fx, fy, fz);
-		g.add(f.group);
-		spins.push(f.spin);
 	}
 
 	if (m.ornate) {
@@ -435,6 +610,8 @@ export function ramSticks(theme: Theme, magnitude: number, moduleMb: number[], g
 		mats.push(ironSpreaderMat);
 	}
 
+	const ramStyle = Math.floor(range(rng, 0, 3));
+
 	const mods = moduleMb.length ? moduleMb : [1];
 	const max = Math.max(...mods);
 	const gap = 0.4;
@@ -467,15 +644,42 @@ export function ramSticks(theme: Theme, magnitude: number, moduleMb: number[], g
 				plate.position.set(0, 0.03, 0);
 				stickGroup.add(plate);
 
-				for (let f = 0; f < 4; f++) {
-					const ridge = new Mesh(new BoxGeometry(0.27, 0.02, 0.11), fin);
-					ridge.position.set(0, h * 0.28 - f * 0.12, 0);
-					stickGroup.add(ridge);
-				}
+				if (ramStyle === 0) {
+					// Style 0: Sleek RGB Lightbar
+					for (let f = 0; f < 2; f++) {
+						const ridge = new Mesh(new BoxGeometry(0.27, 0.02, 0.11), fin);
+						ridge.position.set(0, h * 0.2 - f * 0.12, 0);
+						stickGroup.add(ridge);
+					}
 
-				const crown = new Mesh(new BoxGeometry(0.27, 0.06, 0.12), bar);
-				crown.position.set(0, h / 2 - 0.02, 0);
-				stickGroup.add(crown);
+					const crown = new Mesh(new BoxGeometry(0.27, 0.08, 0.12), bar);
+					crown.position.set(0, h / 2 - 0.03, 0);
+					stickGroup.add(crown);
+				} else if (ramStyle === 1) {
+					// Style 1: Tactical/Segmented Armor
+					const armorPlate = new Mesh(new BoxGeometry(0.28, h * 0.35, 0.11), fin);
+					armorPlate.position.set(0, -h * 0.1, 0);
+					stickGroup.add(armorPlate);
+
+					// 3 small glowing segments
+					for (let s = 0; s < 3; s++) {
+						const segment = new Mesh(new BoxGeometry(0.06, 0.06, 0.12), bar);
+						segment.position.set(-0.09 + s * 0.09, h / 2 - 0.02, 0);
+						stickGroup.add(segment);
+					}
+				} else {
+					// Style 2: Ribbed Comb Heatsink
+					const combMat = currentSpreaderMat;
+					for (let c = 0; c < 5; c++) {
+						const combFin = new Mesh(new BoxGeometry(0.02, 0.12, 0.11), combMat);
+						combFin.position.set(-0.1 + c * 0.05, h / 2 + 0.04, 0);
+						stickGroup.add(combFin);
+					}
+
+					const sideGlow = new Mesh(new BoxGeometry(0.22, 0.05, 0.115), bar);
+					sideGlow.position.set(0, h * 0.1, 0);
+					stickGroup.add(sideGlow);
+				}
 
 				// Alloy: neon accent bars on sides of the spreader plate
 				if (md.alloy) {
@@ -553,6 +757,8 @@ export function driveUnit(
 	const h = (kind === 'hdd' ? 0.58 : 0.46) * heft;
 	const d = kind === 'hdd' ? 0.22 : 0.12;
 
+	const driveStyle = Math.floor(range(rng, 0, 3));
+
 	if (md.ornate) {
 		// Divine: Levitating crystal storage shard spinning in space
 		const shardMat = accent(theme, glow, magnitude, 2.4);
@@ -566,47 +772,144 @@ export function driveUnit(
 			shard.rotation.y = t * 1.8;
 			shard.position.z = 0.35 + Math.sin(t * 3.0) * 0.06;
 		};
-	} else if (kind === 'hdd' && md.iron) {
-		// Iron HDD: open-platter magnetic drive
-		const baseBox = new Mesh(new BoxGeometry(w, h, d * 0.6), body);
-		baseBox.position.z = -d * 0.2;
-		g.add(baseBox);
-		
-		const platterMat = new MeshStandardMaterial({ color: 0xcccccc, roughness: 0.12, metalness: 0.95 });
-		mats.push(platterMat);
-		const platter = new Mesh(new CylinderGeometry(w * 0.36, w * 0.36, 0.03, 24), platterMat);
-		platter.rotation.x = Math.PI / 2;
-		platter.position.set(0, -h * 0.1, d * 0.1);
-		g.add(platter);
-		
-		const armMat = new MeshStandardMaterial({ color: 0x888888, roughness: 0.4, metalness: 0.8 });
-		mats.push(armMat);
-		const arm = new Mesh(new BoxGeometry(w * 0.06, h * 0.4, 0.03), armMat);
-		arm.position.set(-w * 0.28, h * 0.22, d * 0.15);
-		arm.rotation.z = -Math.PI / 6;
-		g.add(arm);
-		
-		spin = (t) => {
-			platter.rotation.y = t * 6.0;
-			arm.rotation.z = -Math.PI / 6 + Math.sin(t * 15) * 0.04;
-		};
-		topY = h / 2 + 0.06;
+	} else if (kind === 'hdd') {
+		if (driveStyle === 1 || md.iron) {
+			// Style 1 (or Iron theme): Open-platter magnetic drive
+			const baseBox = new Mesh(new BoxGeometry(w, h, d * 0.6), body);
+			baseBox.position.z = -d * 0.2;
+			g.add(baseBox);
+			
+			const platterMat = new MeshStandardMaterial({ color: 0xcccccc, roughness: 0.12, metalness: 0.95 });
+			mats.push(platterMat);
+			const platter = new Mesh(new CylinderGeometry(w * 0.36, w * 0.36, 0.03, 24), platterMat);
+			platter.rotation.x = Math.PI / 2;
+			platter.position.set(0, -h * 0.1, d * 0.1);
+			g.add(platter);
+			
+			const armMat = new MeshStandardMaterial({ color: 0x888888, roughness: 0.4, metalness: 0.8 });
+			mats.push(armMat);
+			const arm = new Mesh(new BoxGeometry(w * 0.06, h * 0.4, 0.03), armMat);
+			arm.position.set(-w * 0.28, h * 0.22, d * 0.15);
+			arm.rotation.z = -Math.PI / 6;
+			g.add(arm);
+			
+			spin = (t) => {
+				platter.rotation.y = t * 6.0;
+				arm.rotation.z = -Math.PI / 6 + Math.sin(t * 15) * 0.04;
+			};
+			topY = h / 2 + 0.06;
+		} else if (driveStyle === 2) {
+			// Style 2: Rugged Corner-Bumper HDD
+			g.add(new Mesh(new BoxGeometry(w, h, d), body));
+
+			const label = new Mesh(
+				new PlaneGeometry(w * 0.82, h * 0.66),
+				new MeshStandardMaterial({ map: sticker(rng, kind, labelText), roughness: 0.85, metalness: 0, emissive: glow, emissiveIntensity: 0.12 })
+			);
+			label.position.z = d / 2 + 0.001;
+			g.add(label);
+			mats.push(label.material as MeshStandardMaterial);
+
+			// Add rubber bumper edges
+			const bumperMat = DARK();
+			const bL = new Mesh(new BoxGeometry(w * 0.08, h * 1.04, d * 1.08), bumperMat);
+			bL.position.set(-w * 0.47, 0, 0);
+			const bR = new Mesh(new BoxGeometry(w * 0.08, h * 1.04, d * 1.08), bumperMat);
+			bR.position.set(w * 0.47, 0, 0);
+			const bT = new Mesh(new BoxGeometry(w * 1.02, h * 0.08, d * 1.08), bumperMat);
+			bT.position.set(0, h * 0.47, 0);
+			const bB = new Mesh(new BoxGeometry(w * 1.02, h * 0.08, d * 1.08), bumperMat);
+			bB.position.set(0, -h * 0.47, 0);
+			g.add(bL, bR, bT, bB);
+
+			const screw = DARK();
+			[-1, 1].forEach((sx) =>
+				[-1, 1].forEach((sy) => {
+					const s = new Mesh(new CylinderGeometry(0.02, 0.02, 0.02, 6), screw);
+					s.rotation.x = Math.PI / 2;
+					s.position.set(sx * w * 0.4, sy * h * 0.35, d / 2);
+					g.add(s);
+				})
+			);
+			topY = h / 2 + 0.06;
+		} else {
+			// Style 0: Standard Sealed HDD
+			g.add(new Mesh(new BoxGeometry(w, h, d), body));
+
+			const label = new Mesh(
+				new PlaneGeometry(w * 0.82, h * 0.66),
+				new MeshStandardMaterial({ map: sticker(rng, kind, labelText), roughness: 0.85, metalness: 0, emissive: glow, emissiveIntensity: 0.12 })
+			);
+			label.position.z = d / 2 + 0.001;
+			g.add(label);
+			mats.push(label.material as MeshStandardMaterial);
+
+			const screw = DARK();
+			[-1, 1].forEach((sx) =>
+				[-1, 1].forEach((sy) => {
+					const s = new Mesh(new CylinderGeometry(0.02, 0.02, 0.02, 6), screw);
+					s.rotation.x = Math.PI / 2;
+					s.position.set(sx * w * 0.42, sy * h * 0.38, d / 2);
+					g.add(s);
+				})
+			);
+			topY = h / 2 + 0.06;
+		}
 	} else if (kind === 'nvme') {
 		body.emissiveIntensity *= 1.2;
 		const nw = 1.0;
 		g.add(new Mesh(new BoxGeometry(nw, 0.26, 0.05), body));
-		const nand = DARK();
-		const chips = Math.max(1, Math.min(4, Math.round(capacityGb / 512)));
-		for (let i = 0; i < chips; i++) {
-			const pkg = new Mesh(new BoxGeometry(0.18, 0.18, 0.07), nand);
-			pkg.position.set(0.34 - i * 0.22, 0, 0.05);
-			g.add(pkg);
-		}
+
 		const fingers = accent(theme, glow, magnitude, 1.3);
 		mats.push(fingers);
 		const edge = new Mesh(new BoxGeometry(0.1, 0.2, 0.07), fingers);
 		edge.position.set(0.46, 0, 0);
 		g.add(edge);
+
+		if (driveStyle === 0) {
+			// Style 0: Bare PCB / Exposed Chips
+			const nand = DARK();
+			const chips = Math.max(1, Math.min(4, Math.round(capacityGb / 512)));
+			for (let i = 0; i < chips; i++) {
+				const pkg = new Mesh(new BoxGeometry(0.18, 0.18, 0.07), nand);
+				pkg.position.set(0.34 - i * 0.22, 0, 0.05);
+				g.add(pkg);
+			}
+		} else if (driveStyle === 1) {
+			// Style 1: Finned Heatsink
+			const heatsink = new Mesh(new BoxGeometry(nw * 0.74, 0.22, 0.06), body);
+			heatsink.position.set(-0.06, 0, 0.05);
+			g.add(heatsink);
+
+			const finMat = DARK();
+			for (let f = 0; f < 3; f++) {
+				const ridge = new Mesh(new BoxGeometry(nw * 0.7, 0.03, 0.08), finMat);
+				ridge.position.set(-0.06, 0.07 - f * 0.07, 0.06);
+				g.add(ridge);
+			}
+
+			const lineMat = accent(theme, glow, magnitude, 2.0);
+			mats.push(lineMat);
+			const stripe = new Mesh(new BoxGeometry(nw * 0.65, 0.015, 0.09), lineMat);
+			stripe.position.set(-0.06, 0, 0.06);
+			g.add(stripe);
+		} else {
+			// Style 2: Armored with Copper Heatpipe
+			const armor = new Mesh(new BoxGeometry(nw * 0.76, 0.24, 0.05), DARK());
+			armor.position.set(-0.06, 0, 0.05);
+			g.add(armor);
+
+			const pipeMat = new MeshStandardMaterial({ color: 0xb87333, roughness: 0.35, metalness: 0.9 });
+			mats.push(pipeMat);
+			const pipe = new Mesh(new CylinderGeometry(0.015, 0.015, nw * 0.6), pipeMat);
+			pipe.rotation.z = Math.PI / 2;
+			pipe.position.set(-0.06, 0.04, 0.08);
+			g.add(pipe);
+
+			const clip = new Mesh(new BoxGeometry(0.08, 0.24, 0.06), body);
+			clip.position.set(-0.06, 0, 0.08);
+			g.add(clip);
+		}
 
 		// Alloy NVMe: add copper heatpipes and mini heatsink cooler
 		if (md.alloy) {
@@ -626,23 +929,60 @@ export function driveUnit(
 
 		topY = 0.2;
 	} else {
-		if (kind === 'hdd') body.emissiveIntensity *= 0.65;
+		// SATA SSD / Unknown
 		g.add(new Mesh(new BoxGeometry(w, h, d), body));
 
-		const label = new Mesh(
-			new PlaneGeometry(w * 0.82, h * 0.66),
-			new MeshStandardMaterial({ map: sticker(rng, kind, labelText), roughness: 0.85, metalness: 0, emissive: glow, emissiveIntensity: 0.12 })
-		);
-		label.position.z = d / 2 + 0.001;
-		g.add(label);
-		mats.push(label.material as MeshStandardMaterial);
+		if (driveStyle === 1) {
+			// Style 1: Hex Grille / Slotted SSD
+			// Glowing plate underneath
+			const backGlow = new Mesh(new BoxGeometry(w * 0.6, h * 0.6, 0.02), accent(theme, glow, magnitude, 1.8));
+			backGlow.position.z = d / 2 - 0.01;
+			g.add(backGlow);
+			mats.push(backGlow.material as MeshStandardMaterial);
+
+			// Face plate with slot cutouts
+			const facePlate = new Mesh(new BoxGeometry(w, h, 0.02), body);
+			facePlate.position.z = d / 2 + 0.01;
+			g.add(facePlate);
+
+			const ventHole = DARK();
+			for (let i = 0; i < 3; i++) {
+				const slot = new Mesh(new BoxGeometry(0.06, h * 0.5, 0.025), ventHole);
+				slot.position.set(-w * 0.15 + i * 0.15, 0, d / 2 + 0.011);
+				g.add(slot);
+			}
+		} else if (driveStyle === 2) {
+			// Style 2: Ribbed Armor SSD
+			const ribMat = DARK();
+			for (let i = 0; i < 4; i++) {
+				const rib = new Mesh(new BoxGeometry(0.03, h * 0.82, 0.02), ribMat);
+				rib.position.set(-w * 0.3 + i * 0.2, 0, d / 2 + 0.01);
+				g.add(rib);
+			}
+
+			// Metallic logo badge
+			const badgeMat = accent(theme, glow, magnitude, 2.0);
+			mats.push(badgeMat);
+			const badge = new Mesh(new BoxGeometry(0.12, 0.12, 0.03), badgeMat);
+			badge.position.set(0, h * 0.2, d / 2 + 0.01);
+			g.add(badge);
+		} else {
+			// Style 0: Standard SSD with Label
+			const label = new Mesh(
+				new PlaneGeometry(w * 0.82, h * 0.66),
+				new MeshStandardMaterial({ map: sticker(rng, kind, labelText), roughness: 0.85, metalness: 0, emissive: glow, emissiveIntensity: 0.12 })
+			);
+			label.position.z = d / 2 + 0.001;
+			g.add(label);
+			mats.push(label.material as MeshStandardMaterial);
+		}
 
 		const screw = DARK();
 		[-1, 1].forEach((sx) =>
 			[-1, 1].forEach((sy) => {
 				const s = new Mesh(new CylinderGeometry(0.02, 0.02, 0.02, 6), screw);
 				s.rotation.x = Math.PI / 2;
-				s.position.set(sx * w * 0.42, sy * h * 0.38, d / 2);
+				s.position.set(sx * w * 0.42, sy * h * 0.38, d / 2 + 0.005);
 				g.add(s);
 			})
 		);
@@ -650,7 +990,7 @@ export function driveUnit(
 		if (md.damaged) {
 			const tapeMat = new MeshStandardMaterial({ color: 0x8a9097, roughness: 0.9, metalness: 0.1 });
 			mats.push(tapeMat);
-			const tape = new Mesh(new BoxGeometry(w * 0.3, h * 1.04, d * 1.04), tapeMat);
+			const tape = new Mesh(new BoxGeometry(w * 0.3, h * 1.04, d * 1.08), tapeMat);
 			tape.position.set(-w * 0.1, 0, 0);
 			g.add(tape);
 		}
@@ -690,11 +1030,39 @@ export function osBadge(theme: Theme, os: string, glow: Color, rng: Rng): Part {
 	const g = new Group();
 	const mat = texturedSurface(theme, glow, 0.3, rng);
 	const inset = accent(theme, glow, 0.5, 1.8);
-	g.add(new Mesh(new BoxGeometry(0.5, 0.5, 0.08), mat));
 	
-	const tile = new Mesh(new BoxGeometry(0.28, 0.28, 0.1), inset);
-	tile.position.z = 0.04;
-	g.add(tile);
+	const osStyle = Math.floor(range(rng, 0, 3));
+
+	if (osStyle === 1) {
+		// Round Shield Badge
+		const backing = new Mesh(new CylinderGeometry(0.28, 0.28, 0.08, 24), mat);
+		backing.rotation.x = Math.PI / 2;
+		g.add(backing);
+
+		const tile = new Mesh(new CylinderGeometry(0.16, 0.16, 0.1, 24), inset);
+		tile.rotation.x = Math.PI / 2;
+		tile.position.z = 0.04;
+		g.add(tile);
+	} else if (osStyle === 2) {
+		// Hexagonal Plate Badge
+		const backing = new Mesh(new CylinderGeometry(0.29, 0.29, 0.08, 6), mat);
+		backing.rotation.x = Math.PI / 2;
+		backing.rotation.y = Math.PI / 6;
+		g.add(backing);
+
+		const tile = new Mesh(new CylinderGeometry(0.17, 0.17, 0.1, 6), inset);
+		tile.rotation.x = Math.PI / 2;
+		tile.rotation.y = Math.PI / 6;
+		tile.position.z = 0.04;
+		g.add(tile);
+	} else {
+		// Square Badge (default)
+		g.add(new Mesh(new BoxGeometry(0.5, 0.5, 0.08), mat));
+		
+		const tile = new Mesh(new BoxGeometry(0.28, 0.28, 0.1), inset);
+		tile.position.z = 0.04;
+		g.add(tile);
+	}
 
 	// Generate and apply the hand-drawn kid-crayon logo texture
 	const logoTexture = createOsLogoTexture(os);
@@ -706,7 +1074,7 @@ export function osBadge(theme: Theme, os: string, glow: Color, rng: Rng): Part {
 	});
 	
 	// Overlay a flat plane for the logo on top of the front face of the tile
-	const logoMesh = new Mesh(new PlaneGeometry(0.24, 0.24), logoMat);
+	const logoMesh = new Mesh(new PlaneGeometry(0.22, 0.22), logoMat);
 	logoMesh.position.set(0, 0, 0.091);
 	g.add(logoMesh);
 

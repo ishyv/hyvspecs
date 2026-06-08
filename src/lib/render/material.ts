@@ -1,7 +1,7 @@
 import { MeshStandardMaterial, type Color } from 'three';
 import type { Theme } from './themes';
-import { wornMetal } from './texture';
-import type { Rng } from './rng';
+import { proceduralMetal } from './texture';
+import { range, type Rng } from './rng';
 
 // the flat surface, for small accent bits (vents, teeth, ornament) where a texture would be
 // wasted. world decides the metal; the block's magnitude decides how hard it self-illuminates.
@@ -20,7 +20,8 @@ export function surface(theme: Theme, glow: Color, magnitude: number): MeshStand
 // seeded per card. this is what makes parts look forged and distinct instead of identical
 // flat boxes. spray defaults to the glow but can be a decorative accent.
 export function texturedSurface(theme: Theme, glow: Color, magnitude: number, rng: Rng, spray: Color = glow): MeshStandardMaterial {
-	const { map, bump } = wornMetal(rng, theme.metal, spray, theme.corrosion);
+	const texStyle = Math.floor(range(rng, 0, 4));
+	const { map, bump } = proceduralMetal(rng, texStyle, theme.metal, spray, theme.corrosion);
 	return new MeshStandardMaterial({
 		map, // carries colour, so the base stays white
 		bumpMap: bump,

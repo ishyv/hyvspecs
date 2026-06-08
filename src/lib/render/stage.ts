@@ -62,8 +62,8 @@ export function buildStage(
 	(grid.material as { transparent: boolean }).transparent = true;
 	scene.add(grid);
 
-	// sparks: more power → a busier field. seeded so a card's motes are its own.
-	const count = Math.round(40 + energy * 160);
+	// Sparks: particles count scales with energy
+	const count = Math.round(15 + energy * 185);
 	const pos: number[] = [];
 	for (let i = 0; i < count; i++) {
 		pos.push(range(rng, -9, 9), range(rng, -4, 5), range(rng, -6, 3));
@@ -72,99 +72,110 @@ export function buildStage(
 	geo.setAttribute('position', new Float32BufferAttribute(pos, 3));
 	const particles = new Points(
 		geo,
-		new PointsMaterial({ color: glow, size: 0.03, transparent: true, opacity: 0.35 + energy * 0.35 })
+		new PointsMaterial({ color: glow, size: 0.03, transparent: true, opacity: 0.2 + energy * 0.6 })
 	);
 	scene.add(particles);
 
+	const bgStyle = Math.floor(range(rng, 0, 3));
 	let animate: ((t: number) => void) | undefined;
 
-	if (themeName === 'rust') {
-		// Rust: soot falling down + wobbly flickering lights
+	if (bgStyle === 0) {
+		// Style 0: Matrix Starfield (sparks drift & rotation speed scale with energy)
 		animate = (t) => {
-			const positions = particles.geometry.attributes.position.array as Float32Array;
-			for (let i = 1; i < positions.length; i += 3) {
-				positions[i] -= 0.005;
-				if (positions[i] < -4) positions[i] = 5;
-			}
-			particles.geometry.attributes.position.needsUpdate = true;
-			particles.rotation.y = t * 0.01;
+			const rotSpeed = energy * 0.12;
+			particles.rotation.y = t * rotSpeed;
+			particles.rotation.x = t * (rotSpeed * 0.3);
 
-			// flickering keyLight representing unstable, low-power delivery
+			const positions = particles.geometry.attributes.position.array as Float32Array;
+			const fallSpeed = energy * 0.015;
+			if (fallSpeed > 0.001) {
+				for (let i = 1; i < positions.length; i += 3) {
+					positions[i] -= fallSpeed;
+					if (positions[i] < -4) positions[i] = 5;
+				}
+				particles.geometry.attributes.position.needsUpdate = true;
+			}
+
+			// flickering keyLight intensity representing unstable power delivery (stronger on low spec/rust)
 			const baseKey = 45 + energy * 35;
-			keyLight.intensity = baseKey * (0.95 + Math.sin(t * 18) * 0.04 + (Math.sin(t * 3.5) > 0.97 ? -0.35 : 0));
+			keyLight.intensity = baseKey * (1.0 + Math.sin(t * (4 + energy * 10)) * (0.02 + (1 - energy) * 0.06));
 		};
-	} else if (themeName === 'iron') {
-		// Iron: vertical industrial scanning laser + mechanical dust drift
+	} else if (bgStyle === 1) {
+		// Style 1: Laser Horizon (sweeping horizontal laser lines count & speed scale with energy)
+		const lineCount = Math.max(1, Math.round(energy * 4));
+		const lasers: Mesh[] = [];
 		const laserMat = new MeshStandardMaterial({
 			color: glow,
 			emissive: glow,
-			emissiveIntensity: 2.2,
+			emissiveIntensity: 1.5 + energy * 2.0,
 			transparent: true,
-			opacity: 0.8
+			opacity: 0.3 + energy * 0.5
 		});
-		const laser = new Mesh(new PlaneGeometry(18, 0.04), laserMat);
-		laser.position.set(0, -3.18, -4.8);
-		scene.add(laser);
+		
+		for (let i = 0; i < lineCount; i++) {
+			const laser = new Mesh(new PlaneGeometry(18, 0.03), laserMat);
+			laser.position.set(0, -3.18, -4.8);
+			scene.add(laser);
+			lasers.push(laser);
+		}
 
 		animate = (t) => {
-			particles.rotation.y = t * 0.012;
-			particles.rotation.x = Math.sin(t * 0.25) * 0.02;
+			// slow background drift
+			particles.rotation.y = t * (0.01 + energy * 0.03);
 
-			// sweep laser scan line vertically
-			laser.position.y = -0.5 + Math.sin(t * 1.4) * 2.4;
-		};
-	} else if (themeName === 'overcharge') {
-		// Overcharge: vertically rising heat particles + pulsing grid lines
-		animate = (t) => {
-			const positions = particles.geometry.attributes.position.array as Float32Array;
-			for (let i = 1; i < positions.length; i += 3) {
-				positions[i] += 0.008;
-				if (positions[i] > 5) positions[i] = -4;
-			}
-			particles.geometry.attributes.position.needsUpdate = true;
-			particles.rotation.y = t * 0.02;
+			// sweep laser scan lines
+			const sweepSpeed = 0.5 + energy * 2.0;
+			lasers.forEach((laser, idx) => {
+				const offset = idx * (Math.PI / 2);
+				laser.position.y = -0.5 + Math.sin(t * sweepSpeed + offset) * (1.5 + energy * 1.5);
+				laser.position.x = Math.cos(t * (sweepSpeed * 0.5) + offset) * (0.5 * energy);
+			});
 
-			if (grid.material) {
-				(grid.material as { opacity: number }).opacity = 0.12 + Math.sin(t * 4.5) * 0.06;
-			}
+			const baseKey = 45 + energy * 35;
+			keyLight.intensity = baseKey * (1.0 + Math.sin(t * 2.5) * (energy * 0.04));
 		};
-	} else if (themeName === 'alloy') {
-		// Alloy: orbiting spotlights casting dynamic specular highlights + swirling dust
-		animate = (t) => {
-			particles.rotation.y = t * 0.06;
-			particles.rotation.z = t * 0.015;
-
-			// orbiting lights
-			keyLight.position.x = 3 + Math.cos(t * 1.2) * 2.5;
-			keyLight.position.y = 4 + Math.sin(t * 1.2) * 2.5;
-			
-			rimLight.position.x = -4 + Math.cos(t * 0.9) * 2.0;
-			rimLight.position.y = -2 + Math.sin(t * 0.9) * 2.0;
-		};
-	} else if (themeName === 'divine') {
-		// Divine: floating background celestial ring + fast cosmic orbital dust + breathing lights
+	} else {
+		// Style 2: Concentric Halos (rotating wireframe energy rings scale with energy)
+		const ringCount = Math.max(1, Math.round(energy * 3));
+		const rings: Mesh[] = [];
 		const ringMat = new MeshStandardMaterial({
 			color: glow,
 			emissive: glow,
-			emissiveIntensity: 2.5,
-			wireframe: true
+			emissiveIntensity: 1.5 + energy * 2.0,
+			wireframe: true,
+			transparent: true,
+			opacity: 0.15 + energy * 0.65
 		});
-		const aura = new Mesh(new TorusGeometry(4.2, 0.08, 8, 32), ringMat);
-		aura.position.set(0, 0, -4.5);
-		scene.add(aura);
+
+		for (let i = 0; i < ringCount; i++) {
+			const radius = 2.5 + i * 1.3;
+			const ringMesh = new Mesh(new TorusGeometry(radius, 0.03 + energy * 0.03, 8, 32), ringMat);
+			ringMesh.position.set(0, 0, -4.5);
+			scene.add(ringMesh);
+			rings.push(ringMesh);
+		}
 
 		animate = (t) => {
-			particles.rotation.y = t * 0.18;
-			particles.rotation.x = t * 0.04;
+			// slow background drift
+			particles.rotation.y = t * (0.01 + energy * 0.04);
 
-			aura.rotation.z = t * 0.2;
-			aura.rotation.x = Math.sin(t * 0.3) * 0.12;
+			// rotate nested rings
+			const rotBase = 0.05 + energy * 0.4;
+			rings.forEach((ring, idx) => {
+				const dir = idx % 2 === 0 ? 1 : -1;
+				ring.rotation.z = t * rotBase * dir;
+				ring.rotation.x = Math.sin(t * 0.3 + idx) * (0.02 + energy * 0.1);
+				ring.rotation.y = Math.cos(t * 0.2 + idx) * (0.02 + energy * 0.1);
+
+				const breathe = 1.0 + Math.sin(t * (1.5 + energy * 2.5) + idx) * (0.01 + energy * 0.06);
+				ring.scale.setScalar(breathe);
+			});
 
 			// harmonic breathing light intensities
 			const baseKey = 45 + energy * 35;
 			const baseRim = 25 + energy * 45;
-			keyLight.intensity = baseKey * (1.0 + Math.sin(t * 2.5) * 0.06);
-			rimLight.intensity = baseRim * (1.0 + Math.sin(t * 2.5 + Math.PI) * 0.08);
+			keyLight.intensity = baseKey * (1.0 + Math.sin(t * 2.0) * (energy * 0.08));
+			rimLight.intensity = baseRim * (1.0 + Math.sin(t * 2.0 + Math.PI) * (energy * 0.1));
 		};
 	}
 

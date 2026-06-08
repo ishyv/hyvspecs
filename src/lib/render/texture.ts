@@ -1,4 +1,4 @@
-import { CanvasTexture, LinearFilter, RepeatWrapping, SRGBColorSpace, type Color } from 'three';
+import { CanvasTexture, Color, LinearFilter, RepeatWrapping, SRGBColorSpace } from 'three';
 import { range, type Rng } from './rng';
 
 // all textures are generated procedurally on a canvas — no asset files — and seeded so a
@@ -179,4 +179,160 @@ function line(x: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y
 	x.moveTo(x1, y1);
 	x.lineTo(x2, y2);
 	x.stroke();
+}
+
+export function carbonFiber(rng: Rng, base: Color, spray: Color, corrosion: number): WornMaps {
+	const S = 256;
+	const [col, cx] = canvas(S);
+	const [bmp, bx] = canvas(S);
+
+	cx.fillStyle = '#151618';
+	cx.fillRect(0, 0, S, S);
+	bx.fillStyle = '#7a7a7a';
+	bx.fillRect(0, 0, S, S);
+
+	const tileSize = 8;
+	for (let y = 0; y < S; y += tileSize) {
+		for (let x = 0; x < S; x += tileSize) {
+			const isDark = ((x + y) / tileSize) % 2 === 0;
+			cx.fillStyle = isDark ? '#1a1c1e' : '#0e0f10';
+			cx.fillRect(x, y, tileSize, tileSize);
+
+			bx.fillStyle = isDark ? '#8d8d8d' : '#686868';
+			bx.fillRect(x, y, tileSize, tileSize);
+
+			bx.strokeStyle = isDark ? '#9c9c9c' : '#5c5c5c';
+			bx.lineWidth = 1;
+			bx.beginPath();
+			bx.moveTo(x, y + tileSize);
+			bx.lineTo(x + tileSize, y);
+			bx.stroke();
+		}
+	}
+
+	const spr = `#${spray.getHexString()}`;
+	const patches = 1 + Math.floor(rng() * 2);
+	for (let i = 0; i < patches; i++) {
+		const x = range(rng, 0, S);
+		const y = range(rng, 0, S);
+		const r = range(rng, 40, 80);
+		const g = cx.createRadialGradient(x, y, 0, x, y, r);
+		g.addColorStop(0, hexA(spr, range(rng, 0.08, 0.2)));
+		g.addColorStop(1, hexA(spr, 0));
+		cx.fillStyle = g;
+		cx.fillRect(x - r, y - r, r * 2, r * 2);
+	}
+
+	return { map: tex(col, true), bump: tex(bmp, false) };
+}
+
+export function techGrid(rng: Rng, base: Color, spray: Color, corrosion: number): WornMaps {
+	const S = 256;
+	const [col, cx] = canvas(S);
+	const [bmp, bx] = canvas(S);
+
+	cx.fillStyle = `#${base.clone().lerp(new Color(0x111317), 0.4).getHexString()}`;
+	cx.fillRect(0, 0, S, S);
+	bx.fillStyle = '#7a7a7a';
+	bx.fillRect(0, 0, S, S);
+
+	const g = `#${spray.getHexString()}`;
+
+	bx.strokeStyle = '#6a6a6a';
+	bx.lineWidth = 1;
+	for (let i = 0; i < S; i += 32) {
+		bx.beginPath();
+		bx.moveTo(0, i);
+		bx.lineTo(S, i);
+		bx.stroke();
+		bx.beginPath();
+		bx.moveTo(i, 0);
+		bx.lineTo(i, S);
+		bx.stroke();
+	}
+
+	cx.lineWidth = 1.5;
+	for (let i = 0; i < 20; i++) {
+		let px = range(rng, 0, S);
+		let py = range(rng, 0, S);
+		const traceColor = hexA(g, range(rng, 0.15, 0.45));
+		cx.strokeStyle = traceColor;
+		cx.beginPath();
+		cx.moveTo(px, py);
+		const steps = 2 + Math.floor(rng() * 3);
+		for (let s = 0; s < steps; s++) {
+			if (rng() > 0.5) px += range(rng, -30, 30);
+			else py += range(rng, -30, 30);
+			cx.lineTo(px, py);
+		}
+		cx.stroke();
+
+		bx.strokeStyle = '#999999';
+		bx.lineWidth = 1;
+		bx.beginPath();
+		bx.moveTo(px, py);
+		bx.stroke();
+	}
+
+	for (let i = 0; i < 12; i++) {
+		const px = range(rng, 10, S - 10);
+		const py = range(rng, 10, S - 10);
+		cx.fillStyle = hexA(g, range(rng, 0.25, 0.6));
+		cx.fillRect(px - 4, py - 4, 8, 8);
+		bx.fillStyle = '#a0a0a0';
+		bx.fillRect(px - 4, py - 4, 8, 8);
+	}
+
+	return { map: tex(col, true), bump: tex(bmp, false) };
+}
+
+export function frostedPaint(rng: Rng, base: Color, spray: Color, corrosion: number): WornMaps {
+	const S = 256;
+	const [col, cx] = canvas(S);
+	const [bmp, bx] = canvas(S);
+
+	cx.fillStyle = `#${base.getHexString()}`;
+	cx.fillRect(0, 0, S, S);
+	bx.fillStyle = '#7a7a7a';
+	bx.fillRect(0, 0, S, S);
+
+	const dots = 3000;
+	for (let i = 0; i < dots; i++) {
+		const x = range(rng, 0, S);
+		const y = range(rng, 0, S);
+		const r = range(rng, 0.3, 1.2);
+		const dark = rng() > 0.5;
+		
+		cx.fillStyle = dark ? `rgba(0,0,0,${range(rng, 0.04, 0.16)})` : `rgba(255,255,255,${range(rng, 0.02, 0.08)})`;
+		cx.beginPath();
+		cx.arc(x, y, r, 0, 6.28);
+		cx.fill();
+
+		bx.fillStyle = dark ? `rgba(0,0,0,${range(rng, 0.12, 0.32)})` : `rgba(255,255,255,${range(rng, 0.12, 0.32)})`;
+		bx.beginPath();
+		bx.arc(x, y, r, 0, 6.28);
+		bx.fill();
+	}
+
+	const spr = `#${spray.getHexString()}`;
+	const patches = 2;
+	for (let i = 0; i < patches; i++) {
+		const x = range(rng, 0, S);
+		const y = range(rng, 0, S);
+		const r = range(rng, 30, 70);
+		const g = cx.createRadialGradient(x, y, 0, x, y, r);
+		g.addColorStop(0, hexA(spr, range(rng, 0.08, 0.18)));
+		g.addColorStop(1, hexA(spr, 0));
+		cx.fillStyle = g;
+		cx.fillRect(x - r, y - r, r * 2, r * 2);
+	}
+
+	return { map: tex(col, true), bump: tex(bmp, false) };
+}
+
+export function proceduralMetal(rng: Rng, type: number, base: Color, spray: Color, corrosion: number): WornMaps {
+	if (type === 1) return carbonFiber(rng, base, spray, corrosion);
+	if (type === 2) return techGrid(rng, base, spray, corrosion);
+	if (type === 3) return frostedPaint(rng, base, spray, corrosion);
+	return wornMetal(rng, base, spray, corrosion);
 }

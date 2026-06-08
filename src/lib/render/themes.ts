@@ -63,6 +63,23 @@ function materialize(s: Stop): Theme {
 	return { ...s, metal: new Color(s.metal) };
 }
 
+interface ColorPalette {
+	name: string;
+	cool: number;
+	warm: number;
+}
+
+const PALETTES: ColorPalette[] = [
+	{ name: 'cyberpunk', cool: 0x00f3ff, warm: 0xff007f },    // Neon Cyan to Neon Pink/Magenta
+	{ name: 'emerald', cool: 0x00ff88, warm: 0x00bbff },      // Mint/Emerald to Ocean Cyan
+	{ name: 'orange-fyre', cool: 0xffaa00, warm: 0xff3300 },  // Amber Orange to Blazing Crimson
+	{ name: 'ocean-breeze', cool: 0x0055ff, warm: 0x00e1d9 }, // Cobalt Blue to Ocean Turquoise
+	{ name: 'toxic-acid', cool: 0xadff2f, warm: 0xffd700 },   // Lime Green to Golden Yellow
+	{ name: 'quantum-blue', cool: 0x9900ff, warm: 0x00ffff }, // Royal Purple to Electric Cyan
+	{ name: 'monochrome', cool: 0x778899, warm: 0xffffff },   // Cool Slate to Radiant White
+	{ name: 'copper-rust', cool: 0x8b4513, warm: 0xff4500 }   // Saddle Brown to Neon Red-Orange
+];
+
 // the signal/glow colour — continuous, decoupled from the world.
 // derived from the card seed so each user gets a unique color palette (hue),
 // morphing from cool to warm hues depending on performance (heat).
@@ -73,13 +90,11 @@ export function glowColor(heat: number, seed: string): Color {
 		hash = seed.charCodeAt(i) + ((hash << 5) - hash);
 	}
 	
-	// map hash to starting hue (0 to 359)
-	const baseHue = Math.abs(hash % 360);
-	// target hue is shifted by 140 degrees for contrasting warm look
-	const targetHue = (baseHue + 140) % 360;
+	const paletteIndex = Math.abs(hash) % PALETTES.length;
+	const palette = PALETTES[paletteIndex];
 
-	const coolColor = new Color().setHSL(baseHue / 360, 0.72, 0.44);
-	const warmColor = new Color().setHSL(targetHue / 360, 0.82, 0.58);
+	const coolColor = new Color(palette.cool);
+	const warmColor = new Color(palette.warm);
 
 	return coolColor.lerp(warmColor, heat);
 }

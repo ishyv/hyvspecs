@@ -78,17 +78,26 @@
 			labels.push({ anchor: part.anchor, name, value });
 		};
 
+		const isMobile = host.clientWidth / host.clientHeight < 0.9;
+
 		const gpu = specs.gpus[0];
 		const gpuValue = gpu ? gpu.model + (gpu.vram_mb ? ' · ' + cap(gpu.vram_mb) : '') : 'no gpu';
-		place(gpuCard(theme, profile.parts.gpu, glow, rng), 0, 1.1, 'gpu', gpuValue + (specs.gpus.length > 1 ? ` +${specs.gpus.length - 1}` : ''));
-		place(cpuChip(theme, profile.parts.cpu, glow, rng), -3.3, 0.5, 'cpu', specs.cpu.model);
+		const gpuX = 0;
+		const gpuY = isMobile ? 2.2 : 1.1;
+		place(gpuCard(theme, profile.parts.gpu, glow, rng), gpuX, gpuY, 'gpu', gpuValue + (specs.gpus.length > 1 ? ` +${specs.gpus.length - 1}` : ''));
+
+		const cpuX = isMobile ? -1.2 : -3.3;
+		const cpuY = isMobile ? 0.7 : 0.5;
+		place(cpuChip(theme, profile.parts.cpu, glow, rng), cpuX, cpuY, 'cpu', specs.cpu.model);
 
 		const modules = specs.ram.modules.map((m) => m.size_mb);
 		const modulesToRender = modules.slice(0, 4);
+		const ramX = isMobile ? 1.2 : 3.3;
+		const ramY = isMobile ? 0.8 : 0.6;
 		place(
 			ramSticks(theme, profile.parts.ram, modulesToRender, glow, rng),
-			3.3,
-			0.6,
+			ramX,
+			ramY,
 			'ram',
 			cap(specs.ram.total_mb) + (modules.length ? ` · ${modules.length}×` : '')
 		);
@@ -96,7 +105,28 @@
 		const drives = specs.drives;
 		const drivesToRender = drives.slice(0, 4);
 		drivesToRender.forEach((d, i) => {
-			const x = (i - (drivesToRender.length - 1) / 2) * 1.5;
+			let dx = 0;
+			let dy = 0;
+			if (isMobile) {
+				if (i === 0) {
+					dx = 1.2;
+					dy = -0.7;
+				} else if (i === 1 && drivesToRender.length === 2) {
+					dx = 0;
+					dy = -1.8;
+				} else if (drivesToRender.length === 3) {
+					dx = i === 1 ? -0.7 : 0.7;
+					dy = -1.8;
+				} else {
+					// 4 drives or more
+					dx = i === 1 ? -1.2 : i === 2 ? 0 : 1.2;
+					dy = -1.8;
+				}
+			} else {
+				dx = (i - (drivesToRender.length - 1) / 2) * 1.5;
+				dy = -2.0;
+			}
+
 			let name: string = d.kind;
 			let value = cap(d.size_mb);
 			if (i === 3 && drives.length > 4) {
@@ -105,10 +135,12 @@
 				name = 'other drives';
 				value = `+${remainingDrives.length} · ${cap(totalRemainingSize)}`;
 			}
-			place(driveUnit(theme, profile.parts.storage, d.kind, d.size_mb / 1024, value, glow, rng), x, -2.0, name, value);
+			place(driveUnit(theme, profile.parts.storage, d.kind, d.size_mb / 1024, value, glow, rng), dx, dy, name, value);
 		});
 
-		place(osBadge(theme, specs.machine.os, glow, rng), -3.3, -2.0, 'os', specs.machine.os);
+		const osX = isMobile ? -1.2 : -3.3;
+		const osY = isMobile ? -0.7 : -2.0;
+		place(osBadge(theme, specs.machine.os, glow, rng), osX, osY, 'os', specs.machine.os);
 
 		// fit pass: centre content on the rig origin, scale to the frustum, so any part count
 		// obeys the single-viewport law. recomputed on resize.
