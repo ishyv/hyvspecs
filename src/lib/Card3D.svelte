@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import {
+		ACESFilmicToneMapping,
 		AmbientLight,
 		Box3,
 		Group,
@@ -40,6 +41,10 @@
 
 		const renderer = new WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
 		renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+		// filmic tone mapping rolls off the hot divine emissives so highlights keep their shape
+		// instead of clipping to flat gold.
+		renderer.toneMapping = ACESFilmicToneMapping;
+		renderer.toneMappingExposure = 1.15;
 		host.appendChild(renderer.domElement);
 
 		const scene = new Scene();
@@ -47,12 +52,14 @@
 		camera.position.set(0, 0, CAM_Z);
 
 		scene.add(new AmbientLight(0xffffff, theme.ambient));
-		scene.add(new HemisphereLight(0xbfc6cc, 0x0a0a0c, 0.4 + profile.e * 0.4));
-		const key = new PointLight(0xffffff, 30 + profile.e * 40);
+		scene.add(new HemisphereLight(0xbfc6cc, 0x0a0a0c, 0.5 + profile.e * 0.4));
+		const key = new PointLight(0xffffff, 45 + profile.e * 35); // hard specular off the metal
 		key.position.set(3, 4, 5);
-		const rim = new PointLight(glow.getHex(), 20 + profile.e * 50);
+		const rim = new PointLight(glow.getHex(), 25 + profile.e * 45); // tier-tinted edge light
 		rim.position.set(-4, -2, -3);
-		scene.add(key, rim);
+		const fill = new PointLight(0xffffff, 22); // keeps camera-facing faces off black
+		fill.position.set(0, 2, 8);
+		scene.add(key, rim, fill);
 
 		const stage = buildStage(scene, glow, profile.visual.energy, rng);
 
@@ -206,7 +213,8 @@
 		pointer-events: none;
 		overflow: hidden;
 	}
-	/* a part label: dim category over a bright value, pinned above the part's anchor. */
+	/* a part label: dim category over a bright value, pinned above the part with a leader line
+	   + dot dropping to the part's anchor so the association is unambiguous. */
 	.labels :global(.plabel) {
 		position: absolute;
 		top: 0;
@@ -215,22 +223,46 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 0.05rem;
+		padding-bottom: 16px; /* room for the leader so the dot lands on the part */
 		font-family: 'IBM Plex Mono', ui-monospace, monospace;
 		line-height: 1.1;
 		white-space: nowrap;
-		text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+		text-shadow: 0 1px 5px rgba(0, 0, 0, 0.95);
 		transition: opacity 0.2s;
+	}
+	/* leader line from the text down to the part. */
+	.labels :global(.plabel::after) {
+		content: '';
+		position: absolute;
+		left: 50%;
+		bottom: 3px;
+		width: 1px;
+		height: 13px;
+		transform: translateX(-50%);
+		background: linear-gradient(to bottom, rgba(150, 158, 166, 0.7), rgba(150, 158, 166, 0));
+	}
+	/* the pin dot where the leader meets the part. */
+	.labels :global(.plabel::before) {
+		content: '';
+		position: absolute;
+		left: 50%;
+		bottom: 1px;
+		width: 4px;
+		height: 4px;
+		transform: translateX(-50%);
+		background: #c7ccd1;
+		box-shadow: 0 0 4px rgba(0, 0, 0, 0.9);
 	}
 	.labels :global(.plabel .ln) {
 		font-size: 0.6rem;
 		letter-spacing: 0.18em;
 		text-transform: uppercase;
-		color: #7c828a;
+		color: #888f97;
 	}
 	.labels :global(.plabel .lv) {
 		font-size: 0.82rem;
 		letter-spacing: 0.02em;
-		color: #e4e7ea;
+		color: #e8ebee;
 	}
 	.vignette {
 		position: absolute;
