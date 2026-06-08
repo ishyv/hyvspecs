@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Card3D from '$lib/Card3D.svelte';
+	import Card from '$lib/Card.svelte';
 	import { buildEnvelope, type Envelope } from '$lib/envelope';
 	import { scoreEnvelope } from '$lib/score';
 	import type { Payload } from '$lib/payload';
@@ -69,15 +69,8 @@
 </script>
 
 <div class="frame">
-	<header>
-		<span class="id">{env.card_id}</span>
-		<span class="tier" style="color: {profile.visual.heat > 0.5 ? '#d6a85a' : '#2f9e8f'}">
-			{profile.tier.name} · {profile.overall}
-		</span>
-	</header>
-
 	{#key env}
-		<Card3D envelope={env} />
+		<Card envelope={env} />
 	{/key}
 
 	<footer>
@@ -105,38 +98,16 @@
 		font-family: 'IBM Plex Mono', ui-monospace, monospace;
 		color: #c7ccd1;
 	}
-	header {
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		z-index: 2;
-		display: flex;
-		justify-content: space-between;
-		padding: 1.2rem 1.6rem;
-		font-size: 0.85rem;
-		letter-spacing: 0.08em;
-		text-transform: lowercase;
-		pointer-events: none;
-	}
-	.id {
-		color: #6a7178;
-	}
-	.tier {
-		text-transform: uppercase;
-		letter-spacing: 0.18em;
-		font-size: 0.72rem;
-	}
+	/* dev-only tooling, kept clear of the card's own chrome (top corners + bottom readout). */
 	footer {
 		position: absolute;
-		bottom: 0;
-		left: 0;
-		right: 0;
-		z-index: 2;
+		top: 0.9rem;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 3;
 		display: flex;
-		gap: 0.5rem;
+		gap: 0.4rem;
 		justify-content: center;
-		padding: 1.4rem;
 	}
 	button {
 		background: #121317;
@@ -154,9 +125,10 @@
 	}
 	.parts {
 		position: absolute;
-		bottom: 1.4rem;
+		top: 50%;
 		right: 1.6rem;
-		z-index: 2;
+		transform: translateY(-50%);
+		z-index: 3;
 		margin: 0;
 		display: grid;
 		gap: 0.25rem;

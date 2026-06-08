@@ -12,6 +12,7 @@ import {
 } from 'three';
 import type { Theme } from './themes';
 import { range, type Rng } from './rng';
+import { surface } from './material';
 
 // the two heroes. each is a pure builder: (world, its own magnitude 0..1, glow, seed) →
 // an Object3D that knows how to spin and pulse. NO core hard-codes a tier — it reads the
@@ -24,18 +25,6 @@ export interface Core {
 	materials: MeshStandardMaterial[]; // surfaces whose emissive we pulse on the idle beat
 	baseEmissive: number;
 	spin: (t: number) => void; // called each frame with elapsed seconds
-}
-
-function surface(theme: Theme, glow: Color, magnitude: number): MeshStandardMaterial {
-	return new MeshStandardMaterial({
-		color: theme.metal,
-		roughness: theme.roughness,
-		metalness: theme.metalness,
-		flatShading: true, // facets, not smooth blobs — the metallic/sharp law
-		emissive: glow,
-		// stronger parts self-illuminate more, on top of the world's floor.
-		emissiveIntensity: theme.emissive * (0.4 + magnitude)
-	});
 }
 
 // displace every vertex outward by the world's corrosion + seed jitter, so weak/old worlds
