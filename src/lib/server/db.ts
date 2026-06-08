@@ -51,11 +51,41 @@ export interface NewShowcase {
 	editTokenHash: string;
 }
 
-export async function insertShowcase(s: NewShowcase): Promise<{ cardId: string; seed: string }> {
+export async function insertShowcase(
+	s: NewShowcase,
+	requestedCardId?: string
+): Promise<{ cardId: string; seed: string } | null> {
 	await ensureSchema();
 	const seed = generateSeed();
 	const payloadJson = JSON.stringify(s.payload);
 	const createdAt = Math.floor(Date.now() / 1000);
+
+	if (requestedCardId) {
+		try {
+			await client.execute({
+				sql: `INSERT INTO showcases
+					(card_id, handle, verified, seed, payload, label, edit_token_hash, owner_gh_id, created_at)
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				args: [
+					requestedCardId,
+					s.handle,
+					s.verified ? 1 : 0,
+					seed,
+					payloadJson,
+					s.label,
+					s.editTokenHash,
+					s.ownerGhId,
+					createdAt
+				]
+			});
+			return { cardId: requestedCardId, seed };
+		} catch (e) {
+			if (isUniqueViolation(e)) {
+				return null;
+			}
+			throw e;
+		}
+	}
 
 	// retry a fresh card_id on the rare collision within this namespace.
 	for (let attempt = 0; attempt < 8; attempt++) {
@@ -84,6 +114,39 @@ export async function insertShowcase(s: NewShowcase): Promise<{ cardId: string; 
 		}
 	}
 	throw new Error('could not allocate a unique card id');
+}
+
+export interface CardAuth {
+	editTokenHash: string;
+	ownerGhId: number | null;
+}
+
+export async function getCardAuth(handle: string, cardId: string): Promise<CardAuth | null> {
+	await ensureSchema();
+	const { rows } = await client.execute({
+		sql: `SELECT edit_token_hash, owner_gh_id FROM showcases WHERE handle = ? AND card_id = ?`,
+		args: [handle, cardId]
+	});
+	const row = rows[0];
+	if (!row) return null;
+	return {
+		editTokenHash: row.edit_token_hash as string,
+		ownerGhId: row.owner_gh_id ? Number(row.owner_gh_id) : null
+	};
+}
+
+export async function updateShowcase(
+	handle: string,
+	cardId: string,
+	payload: Payload,
+	label: string | null
+): Promise<void> {
+	await ensureSchema();
+	const payloadJson = JSON.stringify(payload);
+	await client.execute({
+		sql: `UPDATE showcases SET payload = ?, label = ? WHERE handle = ? AND card_id = ?`,
+		args: [payloadJson, label, handle, cardId]
+	});
 }
 
 export async function loadEnvelope(handle: string | null, cardId: string): Promise<Envelope | null> {
