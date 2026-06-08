@@ -92,6 +92,9 @@ fn showcase(args: ShowcaseArgs) -> Result<()> {
             .trim_start_matches("https://")
             .trim_start_matches("http://");
 
+        println!("  {dim}tip: run `hyvspecs login` first to get a verified github badge on your card{reset}");
+        println!();
+
         if custom_id.is_none() {
             let prompt = format!("  {signal}\u{25b8}{reset} custom url slug (leave blank for random): ");
             let result = read_input_interactive(
@@ -285,13 +288,6 @@ fn read_input_interactive(
     let _ = io::stdout().flush();
     
     Ok(Some(input))
-}
-
-fn is_valid_id(s: &str) -> bool {
-    if s.is_empty() || s.len() > 30 {
-        return false;
-    }
-    s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
 #[cfg(test)]
