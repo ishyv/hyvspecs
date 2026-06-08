@@ -2,10 +2,11 @@
 	import Card3D from './Card3D.svelte';
 	import type { Envelope } from './envelope';
 	import { scoreEnvelope } from './score';
+	import { glowColorHex } from './render/themes';
 
 	let { envelope }: { envelope: Envelope } = $props();
 	const profile = $derived(scoreEnvelope(envelope));
-	const accent = $derived(profile.visual.heat > 0.5 ? '#d6a85a' : '#2f9e8f');
+	const accent = $derived(glowColorHex(profile.visual.heat, envelope.seed));
 </script>
 
 <div class="card">
@@ -13,7 +14,7 @@
 
 	<header>
 		<div class="who">
-			<span class="handle">{envelope.handle ?? 'anon'}{#if envelope.verified}<span class="check">✓</span>{/if}</span>
+			<span class="handle">{envelope.handle ?? 'anon'}{#if envelope.verified}<span class="check" style="color: {accent}">✓</span>{/if}</span>
 			<span class="id">{envelope.card_id}</span>
 		</div>
 		<div class="power" style="color: {accent}">

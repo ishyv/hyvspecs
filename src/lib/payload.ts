@@ -15,39 +15,48 @@ const Count = v.pipe(v.number(), v.integer(), v.minValue(0));
 export const PayloadSchema = v.strictObject({
 	v: v.literal(1),
 	machine: v.strictObject({
-		os: v.string(),
-		label: v.nullable(v.string())
+		os: v.pipe(v.string(), v.maxLength(100)),
+		label: v.nullable(v.pipe(v.string(), v.maxLength(100)))
 	}),
 	cpu: v.strictObject({
-		model: v.string(),
+		model: v.pipe(v.string(), v.maxLength(150)),
 		vendor: Vendor,
 		cores_physical: v.nullable(Count),
 		cores_logical: Count,
 		clock_max_mhz: v.nullable(Count)
 	}),
-	gpus: v.array(
-		v.strictObject({
-			model: v.string(),
-			vendor: Vendor,
-			vram_mb: v.nullable(Count)
-		})
+	gpus: v.pipe(
+		v.array(
+			v.strictObject({
+				model: v.pipe(v.string(), v.maxLength(150)),
+				vendor: Vendor,
+				vram_mb: v.nullable(Count)
+			})
+		),
+		v.maxLength(8)
 	),
 	ram: v.strictObject({
 		total_mb: Count,
-		modules: v.array(
-			v.strictObject({
-				size_mb: Count,
-				speed_mhz: v.nullable(Count),
-				kind: v.nullable(v.string())
-			})
+		modules: v.pipe(
+			v.array(
+				v.strictObject({
+					size_mb: Count,
+					speed_mhz: v.nullable(Count),
+					kind: v.nullable(v.pipe(v.string(), v.maxLength(50)))
+				})
+			),
+			v.maxLength(16)
 		)
 	}),
-	drives: v.array(
-		v.strictObject({
-			size_mb: Count,
-			kind: DriveKind,
-			read_mbps: v.nullable(Count)
-		})
+	drives: v.pipe(
+		v.array(
+			v.strictObject({
+				size_mb: Count,
+				kind: DriveKind,
+				read_mbps: v.nullable(Count)
+			})
+		),
+		v.maxLength(32)
 	)
 });
 

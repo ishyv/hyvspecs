@@ -63,11 +63,27 @@ function materialize(s: Stop): Theme {
 	return { ...s, metal: new Color(s.metal) };
 }
 
-// the signal/glow colour — continuous, decoupled from the world. cool teal at low power,
-// hot gold at high. hyvui's two accents.
-const TEAL = new Color(0x2f9e8f);
-const GOLD = new Color(0xd6a85a);
+// the signal/glow colour — continuous, decoupled from the world.
+// derived from the card seed so each user gets a unique color palette (hue),
+// morphing from cool to warm hues depending on performance (heat).
+export function glowColor(heat: number, seed: string): Color {
+	// deterministic hash from the seed string
+	let hash = 0;
+	for (let i = 0; i < seed.length; i++) {
+		hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+	}
+	
+	// map hash to starting hue (0 to 359)
+	const baseHue = Math.abs(hash % 360);
+	// target hue is shifted by 140 degrees for contrasting warm look
+	const targetHue = (baseHue + 140) % 360;
 
-export function glowColor(heat: number): Color {
-	return TEAL.clone().lerp(GOLD, heat);
+	const coolColor = new Color().setHSL(baseHue / 360, 0.72, 0.44);
+	const warmColor = new Color().setHSL(targetHue / 360, 0.82, 0.58);
+
+	return coolColor.lerp(warmColor, heat);
+}
+
+export function glowColorHex(heat: number, seed: string): string {
+	return '#' + glowColor(heat, seed).getHexString();
 }

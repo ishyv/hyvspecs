@@ -4,86 +4,183 @@
 	import { scoreEnvelope } from '$lib/score';
 	import type { Payload } from '$lib/payload';
 
-	// local-only visual harness: a few reference rigs so we can watch the scene react across
-	// the brackets without the cli/db. not a real route in spirit — just for tuning the look.
-	const rig = (seed: string, specs: Payload): Envelope =>
-		buildEnvelope({
-			card_id: seed.slice(0, 4).toUpperCase(),
+	// Reactive controls using Svelte 5 state runes
+	let seed = $state('potatoseed');
+	let cpuCores = $state(4);
+	let cpuClock = $state(2.5);
+	let gpuPreset = $state('integrated');
+	let gpuVramGb = $state(2);
+	let ramTotalGb = $state(8);
+	let ramModules = $state(1);
+	let driveTotalGb = $state(512);
+	let driveCount = $state(1);
+	let driveKind = $state('ssd' as 'nvme' | 'ssd' | 'hdd' | 'unknown');
+
+	// Map GPU presets to name and simulated VRAM
+	const gpuPresets = {
+		integrated: { name: 'Intel HD Graphics', vram: 0 },
+		entry: { name: 'NVIDIA GeForce GTX 1050', vram: 2 },
+		mid: { name: 'AMD Radeon RX 6600', vram: 8 },
+		high: { name: 'NVIDIA GeForce RTX 4070', vram: 12 },
+		divine: { name: 'NVIDIA GeForce RTX 4090', vram: 24 }
+	};
+
+	// Derive the envelope reactively
+	const env = $derived.by(() => {
+		const gpuInfo = gpuPresets[gpuPreset as keyof typeof gpuPresets] || gpuPresets.integrated;
+		
+		const payload: Payload = {
+			v: 1,
+			machine: {
+				os: 'Windows 11',
+				label: 'Dev Rig'
+			},
+			cpu: {
+				model: cpuCores >= 32 ? `AMD Threadripper ${cpuCores}-Core` : `Intel Core i${cpuCores === 4 ? 3 : cpuCores === 8 ? 7 : 9}`,
+				vendor: cpuCores >= 32 ? 'amd' : 'intel',
+				cores_physical: Math.max(1, Math.round(cpuCores / 2)),
+				cores_logical: cpuCores,
+				clock_max_mhz: Math.round(cpuClock * 1000)
+			},
+			gpus: [
+				{
+					model: gpuInfo.name,
+					vendor: gpuInfo.name.toLowerCase().includes('nvidia') ? 'nvidia' : gpuInfo.name.toLowerCase().includes('amd') ? 'amd' : 'intel',
+					vram_mb: gpuInfo.vram > 0 ? gpuInfo.vram * 1024 : null
+				}
+			],
+			ram: {
+				total_mb: ramTotalGb * 1024,
+				modules: Array.from({ length: ramModules }, () => ({
+					size_mb: Math.round((ramTotalGb * 1024) / ramModules),
+					speed_mhz: 3200,
+					kind: 'ddr4'
+				}))
+			},
+			drives: Array.from({ length: driveCount }, (_, i) => ({
+				size_mb: Math.round((driveTotalGb * 1024) / driveCount),
+				kind: driveKind,
+				read_mbps: null
+			}))
+		};
+
+		return buildEnvelope({
+			card_id: 'DEV1',
 			handle: null,
 			verified: false,
-			label: null,
+			label: 'Dev Harness',
 			seed,
 			created_at: Date.now(),
-			specs
+			specs: payload
 		});
-
-	const base = (os: string): Pick<Payload, 'v' | 'machine'> => ({
-		v: 1,
-		machine: { os, label: null }
 	});
 
-	const rigs: Envelope[] = [
-		rig('rustpotato0', {
-			...base('Windows 10'),
-			cpu: { model: 'Intel Core i3-6100', vendor: 'intel', cores_physical: 2, cores_logical: 4, clock_max_mhz: 3700 },
-			gpus: [{ model: 'Intel HD Graphics 530', vendor: 'intel', vram_mb: null }],
-			ram: { total_mb: 4096, modules: [{ size_mb: 4096, speed_mhz: 2133, kind: 'DDR4' }] },
-			drives: [{ size_mb: 500000, kind: 'hdd', read_mbps: null }]
-		}),
-		rig('ironlaptop1', {
-			...base('Windows 11'),
-			cpu: { model: 'Intel Core i5-1135G7', vendor: 'intel', cores_physical: 4, cores_logical: 8, clock_max_mhz: 4200 },
-			gpus: [{ model: 'Intel Iris Xe Graphics', vendor: 'intel', vram_mb: null }],
-			ram: { total_mb: 8192, modules: [{ size_mb: 8192, speed_mhz: 3200, kind: 'DDR4' }] },
-			drives: [{ size_mb: 256000, kind: 'ssd', read_mbps: null }]
-		}),
-		rig('midtower22', {
-			...base('Windows 11'),
-			cpu: { model: 'AMD Ryzen 5 5600', vendor: 'amd', cores_physical: 6, cores_logical: 12, clock_max_mhz: 4600 },
-			gpus: [{ model: 'NVIDIA GeForce RTX 3060', vendor: 'nvidia', vram_mb: 12288 }],
-			ram: { total_mb: 16384, modules: [{ size_mb: 8192, speed_mhz: 3600, kind: 'DDR4' }] },
-			drives: [{ size_mb: 1000000, kind: 'nvme', read_mbps: null }]
-		}),
-		rig('lopsided33', {
-			...base('Windows 11'),
-			cpu: { model: 'Intel Core i3-12100', vendor: 'intel', cores_physical: 4, cores_logical: 8, clock_max_mhz: 4300 },
-			gpus: [{ model: 'NVIDIA GeForce RTX 4090', vendor: 'nvidia', vram_mb: 24576 }],
-			ram: { total_mb: 16384, modules: [{ size_mb: 16384, speed_mhz: 3200, kind: 'DDR4' }] },
-			drives: [{ size_mb: 1000000, kind: 'nvme', read_mbps: null }]
-		}),
-		rig('beastmode4', {
-			...base('Windows 11'),
-			cpu: { model: 'AMD Ryzen 9 7950X', vendor: 'amd', cores_physical: 16, cores_logical: 32, clock_max_mhz: 5700 },
-			gpus: [{ model: 'NVIDIA GeForce RTX 4090', vendor: 'nvidia', vram_mb: 24576 }],
-			ram: { total_mb: 65536, modules: [{ size_mb: 16384, speed_mhz: 6000, kind: 'DDR5' }] },
-			drives: [
-				{ size_mb: 4000000, kind: 'nvme', read_mbps: null },
-				{ size_mb: 2000000, kind: 'nvme', read_mbps: null }
-			]
-		})
-	];
-
-	let i = $state(2);
-	const env = $derived(rigs[i]);
 	const profile = $derived(scoreEnvelope(env));
 </script>
 
 <div class="frame">
+	<!-- Re-keys the card to force canvas instantiation on slider change -->
 	{#key env}
 		<Card envelope={env} />
 	{/key}
 
-	<footer>
-		{#each rigs as r, n (r.card_id)}
-			<button class:on={n === i} onclick={() => (i = n)}>{r.specs.cpu.model.split(' ').slice(-1)[0]}</button>
-		{/each}
-	</footer>
+	<div class="panel">
+		<h2>DEV CONTROLLER</h2>
+		
+		<div class="section">
+			<h3>IDENTITY</h3>
+			<label>
+				seed (drives colors/PCBs)
+				<input type="text" bind:value={seed} />
+			</label>
+		</div>
 
-	<dl class="parts">
-		{#each Object.entries(profile.parts) as [k, v] (k)}
-			<div><dt>{k}</dt><dd>{Math.round(v * 100)}</dd></div>
-		{/each}
-	</dl>
+		<div class="section">
+			<h3>CPU</h3>
+			<label>
+				clock speed ({cpuClock.toFixed(1)} GHz)
+				<input type="range" min="1.5" max="6.0" step="0.1" bind:value={cpuClock} />
+			</label>
+			<label>
+				cores ({cpuCores} threads)
+				<input type="range" min="2" max="64" step="2" bind:value={cpuCores} />
+			</label>
+		</div>
+
+		<div class="section">
+			<h3>GPU</h3>
+			<label>
+				GPU Tier Preset
+				<select bind:value={gpuPreset}>
+					<option value="integrated">Integrated (Potato)</option>
+					<option value="entry">Entry GTX 1050 (Low)</option>
+					<option value="mid">Mid RX 6600 (Medium)</option>
+					<option value="high">High RTX 4070 (High)</option>
+					<option value="divine">Enthusiast RTX 4090 (Divine)</option>
+				</select>
+			</label>
+		</div>
+
+		<div class="section">
+			<h3>RAM</h3>
+			<label>
+				capacity ({ramTotalGb} GB)
+				<input type="range" min="4" max="128" step="4" bind:value={ramTotalGb} />
+			</label>
+			<label>
+				sticks count ({ramModules} sticks)
+				<input type="range" min="1" max="12" step="1" bind:value={ramModules} />
+			</label>
+		</div>
+
+		<div class="section">
+			<h3>DRIVES</h3>
+			<label>
+				disk type
+				<select bind:value={driveKind}>
+					<option value="nvme">NVMe M.2 (High)</option>
+					<option value="ssd">SATA SSD (Mid)</option>
+					<option value="hdd">SATA HDD (Low)</option>
+				</select>
+			</label>
+			<label>
+				capacity ({driveTotalGb} GB)
+				<input type="range" min="128" max="8192" step="128" bind:value={driveTotalGb} />
+			</label>
+			<label>
+				drives count ({driveCount} disks)
+				<input type="range" min="1" max="10" step="1" bind:value={driveCount} />
+			</label>
+		</div>
+
+		<div class="stats">
+			<h3>CALCULATED RATINGS</h3>
+			<div class="stat-row">
+				<span>overall score:</span>
+				<strong style="color: #e8ebee">{profile.overall}</strong>
+			</div>
+			<div class="stat-row">
+				<span>tier:</span>
+				<strong class="uppercase" style="color: #d6a85a">{profile.tier.name}</strong>
+			</div>
+			<div class="stat-row">
+				<span>CPU score:</span>
+				<span>{Math.round(profile.parts.cpu * 100)}</span>
+			</div>
+			<div class="stat-row">
+				<span>GPU score:</span>
+				<span>{Math.round(profile.parts.gpu * 100)}</span>
+			</div>
+			<div class="stat-row">
+				<span>RAM score:</span>
+				<span>{Math.round(profile.parts.ram * 100)}</span>
+			</div>
+			<div class="stat-row">
+				<span>Storage score:</span>
+				<span>{Math.round(profile.parts.storage * 100)}</span>
+			</div>
+		</div>
+	</div>
 </div>
 
 <style>
@@ -95,59 +192,94 @@
 		position: fixed;
 		inset: 0;
 		overflow: hidden;
-		font-family: 'IBM Plex Mono', ui-monospace, monospace;
-		color: #c7ccd1;
 	}
-	/* dev-only tooling, kept clear of the card's own chrome (top corners + bottom readout). */
-	footer {
+	.panel {
 		position: absolute;
-		top: 0.9rem;
-		left: 50%;
-		transform: translateX(-50%);
-		z-index: 3;
+		top: 1rem;
+		right: 1rem;
+		bottom: 1rem;
+		width: 320px;
+		background: rgba(8, 8, 10, 0.82);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+		border: 1px solid #26282e;
+		padding: 1.5rem;
+		z-index: 10;
+		overflow-y: auto;
+		font-family: 'IBM Plex Mono', ui-monospace, monospace;
+		font-size: 0.75rem;
+		color: #8a9097;
 		display: flex;
-		gap: 0.4rem;
-		justify-content: center;
+		flex-direction: column;
+		gap: 1.2rem;
+		box-shadow: -8px 0 32px rgba(0, 0, 0, 0.6);
 	}
-	button {
+	
+	/* Scrollbar styling */
+	.panel::-webkit-scrollbar {
+		width: 4px;
+	}
+	.panel::-webkit-scrollbar-track {
+		background: transparent;
+	}
+	.panel::-webkit-scrollbar-thumb {
+		background: #26282e;
+	}
+
+	h2 {
+		font-size: 0.95rem;
+		letter-spacing: 0.15em;
+		color: #e8ebee;
+		margin: 0 0 0.5rem 0;
+		border-bottom: 1px solid #1c1d24;
+		padding-bottom: 0.5rem;
+	}
+	h3 {
+		font-size: 0.7rem;
+		letter-spacing: 0.1em;
+		color: #d6a85a;
+		margin: 0 0 0.5rem 0;
+	}
+	.section {
+		display: flex;
+		flex-direction: column;
+		gap: 0.8rem;
+		border-bottom: 1px solid #14151b;
+		padding-bottom: 0.8rem;
+	}
+	label {
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+	}
+	input[type="text"], select {
 		background: #121317;
 		border: 1px solid #26282e;
-		color: #8a9097;
+		color: #e8ebee;
 		font: inherit;
-		font-size: 0.72rem;
-		letter-spacing: 0.06em;
-		padding: 0.4rem 0.7rem;
+		padding: 0.35rem 0.5rem;
+		outline: none;
+		border-radius: 0;
+	}
+	select {
 		cursor: pointer;
 	}
-	button.on {
-		border-color: #d6a85a;
-		color: #d6a85a;
+	input[type="range"] {
+		width: 100%;
+		accent-color: #2f9e8f;
+		background: #1c1d24;
+		height: 3px;
+		outline: none;
+		border-radius: 0;
 	}
-	.parts {
-		position: absolute;
-		top: 50%;
-		right: 1.6rem;
-		transform: translateY(-50%);
-		z-index: 3;
-		margin: 0;
-		display: grid;
-		gap: 0.25rem;
-		font-size: 0.68rem;
-		color: #6a7178;
-		text-align: right;
-	}
-	.parts div {
+	.stats {
 		display: flex;
-		gap: 0.6rem;
-		justify-content: flex-end;
+		flex-direction: column;
+		gap: 0.4rem;
 	}
-	.parts dt {
-		text-transform: uppercase;
-		letter-spacing: 0.1em;
-	}
-	.parts dd {
-		margin: 0;
-		color: #c7ccd1;
-		min-width: 1.6rem;
+	.stat-row {
+		display: flex;
+		justify-content: space-between;
+		line-height: 1.4;
 	}
 </style>

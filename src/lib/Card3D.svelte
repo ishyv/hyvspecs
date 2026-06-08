@@ -35,7 +35,7 @@
 	onMount(() => {
 		const profile = scoreEnvelope(envelope);
 		const theme = resolveTheme(profile.e);
-		const glow = glowColor(profile.visual.heat);
+		const glow = glowColor(profile.visual.heat, envelope.seed);
 		const rng = makeRng(envelope.seed);
 		const specs = envelope.specs;
 
@@ -61,7 +61,7 @@
 		fill.position.set(0, 2, 8);
 		scene.add(key, rim, fill);
 
-		const stage = buildStage(scene, glow, profile.visual.energy, rng);
+		const stage = buildStage(scene, glow, profile.visual.energy, rng, theme.name, key, rim);
 
 		// assemble the loadout, then place each piece. a label is pinned to every part's anchor
 		// so name + value travel with it. positions are loose; a fit pass scales to frame after.
@@ -84,8 +84,9 @@
 		place(cpuChip(theme, profile.parts.cpu, glow, rng), -3.3, 0.5, 'cpu', specs.cpu.model);
 
 		const modules = specs.ram.modules.map((m) => m.size_mb);
+		const modulesToRender = modules.slice(0, 4);
 		place(
-			ramSticks(theme, profile.parts.ram, modules, glow, rng),
+			ramSticks(theme, profile.parts.ram, modulesToRender, glow, rng),
 			3.3,
 			0.6,
 			'ram',
@@ -93,9 +94,18 @@
 		);
 
 		const drives = specs.drives;
-		drives.forEach((d, i) => {
-			const x = (i - (drives.length - 1) / 2) * 1.5;
-			place(driveUnit(theme, profile.parts.storage, d.kind, d.size_mb / 1024, cap(d.size_mb), glow, rng), x, -2.0, d.kind, cap(d.size_mb));
+		const drivesToRender = drives.slice(0, 4);
+		drivesToRender.forEach((d, i) => {
+			const x = (i - (drivesToRender.length - 1) / 2) * 1.5;
+			let name: string = d.kind;
+			let value = cap(d.size_mb);
+			if (i === 3 && drives.length > 4) {
+				const remainingDrives = drives.slice(3);
+				const totalRemainingSize = remainingDrives.reduce((sum, rd) => sum + rd.size_mb, 0);
+				name = 'other drives';
+				value = `+${remainingDrives.length} · ${cap(totalRemainingSize)}`;
+			}
+			place(driveUnit(theme, profile.parts.storage, d.kind, d.size_mb / 1024, value, glow, rng), x, -2.0, name, value);
 		});
 
 		place(osBadge(theme, glow, rng), -3.3, -2.0, 'os', specs.machine.os);
@@ -122,7 +132,17 @@
 		const els = labels.map((l) => {
 			const el = document.createElement('div');
 			el.className = 'plabel';
-			el.innerHTML = `<span class="ln">${l.name}</span><span class="lv">${l.value}</span>`;
+
+			const lnSpan = document.createElement('span');
+			lnSpan.className = 'ln';
+			lnSpan.textContent = l.name;
+
+			const lvSpan = document.createElement('span');
+			lvSpan.className = 'lv';
+			lvSpan.textContent = l.value;
+
+			el.appendChild(lnSpan);
+			el.appendChild(lvSpan);
 			labelLayer.appendChild(el);
 			return el;
 		});
@@ -147,7 +167,11 @@
 			const b = 1 + pulseAmt * Math.sin(t * profile.visual.pulseHz * TAU);
 			for (const s of spinners) s(t);
 			breath.forEach((m, i) => (m.emissiveIntensity = base[i] * b));
-			stage.particles.rotation.y = t * 0.02;
+			if (stage.animate) {
+				stage.animate(t);
+			} else {
+				stage.particles.rotation.y = t * 0.02;
+			}
 			renderer.render(scene, camera);
 			projectLabels(host.clientWidth, host.clientHeight);
 			raf = requestAnimationFrame(tick);
@@ -238,9 +262,14 @@
 		padding-bottom: 16px; /* room for the leader so the dot lands on the part */
 		font-family: 'IBM Plex Mono', ui-monospace, monospace;
 		line-height: 1.1;
-		white-space: nowrap;
 		text-shadow: 0 1px 5px rgba(0, 0, 0, 0.95);
 		transition: opacity 0.2s;
+		max-width: 130px;
+	}
+	@media (min-width: 640px) {
+		.labels :global(.plabel) {
+			max-width: 220px;
+		}
 	}
 	/* leader line from the text down to the part. */
 	.labels :global(.plabel::after) {
@@ -270,11 +299,21 @@
 		letter-spacing: 0.18em;
 		text-transform: uppercase;
 		color: #888f97;
+		width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		text-align: center;
+		white-space: nowrap;
 	}
 	.labels :global(.plabel .lv) {
 		font-size: 0.82rem;
 		letter-spacing: 0.02em;
 		color: #e8ebee;
+		width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		text-align: center;
+		white-space: nowrap;
 	}
 	.vignette {
 		position: absolute;
