@@ -167,7 +167,7 @@
 					</div>
 					<div class="line output">Gathering hardware specifications...</div>
 					<div class="line output">Found: CPU 16-Core · GPU NVIDIA RTX 4070 · RAM 32GB</div>
-					<div class="line output success">✓ Card generated: <span class="url">https://hyv-specs.vercel.app/dev</span></div>
+					<div class="line output success">✓ Card generated: <span class="url">https://specs.hyvnt.dev/4CAT</span></div>
 				</div>
 			</div>
 		</section>

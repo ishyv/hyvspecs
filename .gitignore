@@ -31,13 +31,11 @@ hyvspecs-cli/target
 
 .vscode
 bun.lock
+package-lock.json
 
 CLAUDE.md
 AGENTS.md
-.vercel
 scratch
 .claude
 docs
 .mcp.json
-.vscode 
-.vercel

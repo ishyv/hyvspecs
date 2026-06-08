@@ -70,8 +70,11 @@ jobs:
         shell: bash
         run: |
           SRC="hyvspecs-cli/target/${{ matrix.target }}/release/${{ matrix.artifact }}"
-          EXT="${{ matrix.artifact == 'hyvspecs.exe' && '.exe' || '' }}"
-          DEST="hyvspecs-${{ matrix.target }}${EXT}"
+          if [[ "${{ matrix.artifact }}" == *.exe ]]; then
+            DEST="hyvspecs-${{ matrix.target }}.exe"
+          else
+            DEST="hyvspecs-${{ matrix.target }}"
+          fi
           cp "$SRC" "$DEST"
           echo "ASSET=$DEST" >> "$GITHUB_ENV"
 
