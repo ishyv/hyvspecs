@@ -99,35 +99,16 @@ fn showcase(args: ShowcaseArgs) -> Result<()> {
             output::color("\x1b[38;5;240m"),
             output::color("\x1b[0m"),
         );
+        let arrow = output::glyphs().arrow;
         let host = endpoint
             .trim_start_matches("https://")
             .trim_start_matches("http://");
 
         // 1. Verification prompt
         if !publish_verified {
-            print!("  {signal}\u{25b8}{reset} publish under your verified github profile? [y/N]: ");
+            print!("  {signal}{arrow}{reset} publish under your verified github profile? [y/N]: ");
             io::stdout().flush()?;
-            let confirmed = {
-                let _guard = RawModeGuard::enable()?;
-                loop {
-                    if event::poll(std::time::Duration::from_millis(100))? {
-                        if let Event::Key(key_event) = event::read()? {
-                            if key_event.kind != crossterm::event::KeyEventKind::Press {
-                                continue;
-                            }
-                            match key_event.code {
-                                KeyCode::Char('y') | KeyCode::Char('Y') => break true,
-                                KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => break false,
-                                KeyCode::Char('c') if key_event.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
-                                    break false;
-                                }
-                                KeyCode::Enter => break false,
-                                _ => {}
-                            }
-                        }
-                    }
-                }
-            };
+            let confirmed = confirm_yn()?;
             println!();
 
             if confirmed {
@@ -135,11 +116,9 @@ fn showcase(args: ShowcaseArgs) -> Result<()> {
                     println!("    to verify your github handle, we need a personal access token.");
                     println!("    please generate one at: {gold}https://github.com/settings/tokens/new?description=hyvspecs-cli&scopes=read:user{reset}");
                     println!();
-                    print!("  {signal}\u{25b8}{reset} paste your token: ");
+                    print!("  {signal}{arrow}{reset} paste your token: ");
                     io::stdout().flush()?;
-                    let mut token = String::new();
-                    io::stdin().read_line(&mut token)?;
-                    let trimmed = token.trim().to_string();
+                    let trimmed = read_secret()?;
                     if !trimmed.is_empty() {
                         println!("    {dim}verifying...{reset}");
                         match upload::verify_github_token(&trimmed) {
@@ -171,24 +150,17 @@ fn showcase(args: ShowcaseArgs) -> Result<()> {
         };
 
         if custom_id.is_none() {
-            let prompt = format!("  {signal}\u{25b8}{reset} custom url slug (leave blank for random): ");
+            let prompt = format!("  {signal}{arrow}{reset} custom url slug (leave blank for random): ");
             let result = read_input_interactive(
                 &prompt,
                 "",
                 |c, len| (c.is_ascii_alphanumeric() || c == '_' || c == '-') && len < 30,
                 |inp| {
-                    let preview = match &handle {
-                        Some(h) => {
-                            let target = if inp.is_empty() { "[random]" } else { inp };
-                            format!("{host}/{h}/{target}")
-                        }
-                        None => {
-                            let target = if inp.is_empty() { "[random]" } else { inp };
-                            format!("{host}/{target}")
-                        }
-                    };
-                    print!("    {dim}preview: {}{reset}", preview);
-                    let _ = io::stdout().flush();
+                    let target = if inp.is_empty() { "[random]" } else { inp };
+                    match &handle {
+                        Some(h) => format!("preview: {host}/{h}/{target}"),
+                        None => format!("preview: {host}/{target}"),
+                    }
                 },
             )?;
             let Some(trimmed) = result else {
@@ -202,22 +174,21 @@ fn showcase(args: ShowcaseArgs) -> Result<()> {
 
         if custom_label.is_none() {
             let slug_str = custom_id.as_deref().unwrap_or("[random]");
-            let prompt = format!("  {signal}\u{25b8}{reset} label (leave blank to skip): ");
+            let prompt = format!("  {signal}{arrow}{reset} label (leave blank to skip): ");
             let result = read_input_interactive(
                 &prompt,
                 "",
                 |c, len| !c.is_control() && len < 50,
                 |inp| {
-                    let preview = match &handle {
+                    let base = match &handle {
                         Some(h) => format!("{host}/{h}/{slug_str}"),
                         None => format!("{host}/{slug_str}"),
                     };
                     if inp.is_empty() {
-                        print!("    {dim}preview: {}{reset}", preview);
+                        format!("preview: {base}")
                     } else {
-                        print!("    {dim}preview: {}  [label: {}]{reset}", preview, inp);
+                        format!("preview: {base}  [label: {inp}]")
                     }
-                    let _ = io::stdout().flush();
                 },
             )?;
             let Some(trimmed) = result else {
@@ -241,30 +212,10 @@ fn showcase(args: ShowcaseArgs) -> Result<()> {
             format!("{preview_url}  [label: {label_str}]")
         };
 
-        print!("  {signal}\u{25b8}{reset} publish to {gold}{target_url}{reset}? [y/N]: ");
+        print!("  {signal}{arrow}{reset} publish to {gold}{target_url}{reset}? [y/N]: ");
         io::stdout().flush()?;
 
-        let confirmed = {
-            let _guard = RawModeGuard::enable()?;
-            loop {
-                if event::poll(std::time::Duration::from_millis(100))? {
-                    if let Event::Key(key_event) = event::read()? {
-                        if key_event.kind != crossterm::event::KeyEventKind::Press {
-                            continue;
-                        }
-                        match key_event.code {
-                            KeyCode::Char('y') | KeyCode::Char('Y') => break true,
-                            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => break false,
-                            KeyCode::Char('c') if key_event.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
-                                break false;
-                            }
-                            KeyCode::Enter => break false,
-                            _ => {}
-                        }
-                    }
-                }
-            }
-        };
+        let confirmed = confirm_yn()?;
 
         println!();
         if !confirmed {
@@ -318,12 +269,11 @@ fn login() -> Result<()> {
     println!("    {gold}https://github.com/settings/tokens/new?description=hyvspecs-cli&scopes=read:user{reset}");
     println!();
 
-    print!("  {signal}\u{25b8}{reset} paste your github access token: ");
+    let g = output::glyphs();
+    print!("  {signal}{}{reset} paste your github access token: ", g.arrow);
     io::stdout().flush()?;
 
-    let mut token = String::new();
-    io::stdin().read_line(&mut token)?;
-    let trimmed = token.trim().to_string();
+    let trimmed = read_secret()?;
     if trimmed.is_empty() {
         bail!("login cancelled: token cannot be empty");
     }
@@ -334,7 +284,7 @@ fn login() -> Result<()> {
     config::save_github_token(&trimmed, &username)?;
 
     println!();
-    println!("  {signal}\u{2713}{reset} successfully logged in as {gold}@{username}{reset}");
+    println!("  {signal}{}{reset} successfully logged in as {gold}@{username}{reset}", g.check);
     println!();
     Ok(())
 }
@@ -374,7 +324,10 @@ fn claim(card_id: &str) -> Result<()> {
     );
 
     println!();
-    println!("  {signal}\u{2713}{reset} successfully claimed! card is now at: {gold}{host}/{handle}/{card_id}{reset}");
+    println!(
+        "  {signal}{}{reset} successfully claimed! card is now at: {gold}{host}/{handle}/{card_id}{reset}",
+        output::glyphs().check
+    );
     println!();
     Ok(())
 }
@@ -391,40 +344,163 @@ fn delete(card_id: &str) -> Result<()> {
     upload::delete_showcase(&config::endpoint(), card_id, &token)?;
     // match the house style the rest of the cli uses, instead of a bare unstyled line.
     println!();
-    println!("  {signal}\u{2713}{reset} deleted {gold}{card_id}{reset}");
+    println!("  {signal}{}{reset} deleted {gold}{card_id}{reset}", output::glyphs().check);
     println!();
     Ok(())
 }
 
+/// one raw-mode y/N prompt, shared by every confirmation. Enter, Esc and Ctrl-C all mean *no* —
+/// the safe default, since both call sites gate a publish.
+fn confirm_yn() -> Result<bool> {
+    let _guard = RawModeGuard::enable()?;
+    loop {
+        if event::poll(std::time::Duration::from_millis(100))? {
+            if let Event::Key(k) = event::read()? {
+                if k.kind != crossterm::event::KeyEventKind::Press {
+                    continue;
+                }
+                match k.code {
+                    KeyCode::Char('y') | KeyCode::Char('Y') => return Ok(true),
+                    KeyCode::Char('c')
+                        if k.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) =>
+                    {
+                        return Ok(false);
+                    }
+                    KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc | KeyCode::Enter => {
+                        return Ok(false);
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
+/// read a token WITHOUT echoing it. a pasted PAT that echoes lands in the scrollback, the
+/// terminal's history, and any screen recording. we print a dot per character so there's still
+/// feedback that the paste landed. piped input isn't echoed anyway, so it just reads the line.
+fn read_secret() -> Result<String> {
+    if !io::stdin().is_terminal() {
+        let mut s = String::new();
+        io::stdin().read_line(&mut s)?;
+        println!(); // piped input isn't echoed, so close the prompt row ourselves
+        return Ok(s.trim().to_string());
+    }
+
+    let mut secret = String::new();
+    {
+        let _guard = RawModeGuard::enable()?;
+        loop {
+            if event::poll(std::time::Duration::from_millis(100))? {
+                if let Event::Key(k) = event::read()? {
+                    if k.kind != crossterm::event::KeyEventKind::Press {
+                        continue;
+                    }
+                    match k.code {
+                        KeyCode::Char('c')
+                            if k.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) =>
+                        {
+                            secret.clear();
+                            break;
+                        }
+                        KeyCode::Char(c) => {
+                            secret.push(c);
+                            print!("*");
+                            let _ = io::stdout().flush();
+                        }
+                        KeyCode::Backspace => {
+                            if secret.pop().is_some() {
+                                print!("\u{8} \u{8}");
+                                let _ = io::stdout().flush();
+                            }
+                        }
+                        KeyCode::Enter | KeyCode::Esc => break,
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+    print!("\r\n");
+    let _ = io::stdout().flush();
+    Ok(secret.trim().to_string())
+}
+
+/// visible width, skipping ansi escape sequences — a coloured prompt must measure as what the
+/// user actually sees, or every width calculation below is wrong.
+fn visible_width(s: &str) -> usize {
+    let mut w = 0;
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            for c2 in chars.by_ref() {
+                if c2.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+        } else {
+            w += 1;
+        }
+    }
+    w
+}
+
+/// the last `n` chars, so a long slug scrolls within the prompt row instead of wrapping it.
+fn tail(s: &str, n: usize) -> String {
+    let len = s.chars().count();
+    if len <= n {
+        return s.to_string();
+    }
+    s.chars().skip(len - n).collect()
+}
+
+/// clamp to `n` chars so a long preview can't wrap onto a second row.
+fn clip(s: &str, n: usize) -> String {
+    let len = s.chars().count();
+    if len <= n {
+        return s.to_string();
+    }
+    if n <= 1 {
+        return String::new();
+    }
+    s.chars().take(n - 1).chain(std::iter::once('\u{2026}')).collect()
+}
+
+/// repaint the prompt row and the live preview row beneath it, leaving the cursor back on the
+/// prompt. BOTH rows are clamped to the terminal width: the old version assumed neither would
+/// wrap and then moved the cursor up exactly one line, so a narrow terminal or a long slug
+/// desynced the cursor and shredded the prompt.
 fn redraw_prompt_and_preview(
     prompt: &str,
     input: &str,
-    redraw_preview: &impl Fn(&str),
+    preview_of: &impl Fn(&str) -> String,
 ) -> io::Result<()> {
-    print!("\r\x1b[K");
-    print!("{}{}", prompt, input);
-    let _ = io::stdout().flush();
-    print!("\r\n\x1b[K");
-    let _ = io::stdout().flush();
-    redraw_preview(input);
-    print!("\x1b[A\r{}{}", prompt, input);
-    let _ = io::stdout().flush();
-    Ok(())
+    let cols = crossterm::terminal::size()
+        .map(|(w, _)| w as usize)
+        .unwrap_or(80)
+        .max(24);
+    let (dim, reset) = (output::color("\x1b[38;5;240m"), output::color("\x1b[0m"));
+
+    let room = cols.saturating_sub(visible_width(prompt)).saturating_sub(1);
+    let shown = tail(input, room);
+    let preview = clip(&preview_of(input), cols.saturating_sub(5)); // 4-space indent + margin
+
+    print!("\r\x1b[K{prompt}{shown}");
+    print!("\r\n\x1b[K    {dim}{preview}{reset}");
+    print!("\x1b[A\r\x1b[K{prompt}{shown}");
+    io::stdout().flush()
 }
 
 fn read_input_interactive(
     prompt: &str,
     initial: &str,
     char_validator: impl Fn(char, usize) -> bool,
-    redraw_preview: impl Fn(&str),
+    preview_of: impl Fn(&str) -> String,
 ) -> Result<Option<String>> {
     let mut input = initial.to_string();
-    
-    print!("{}", prompt);
-    let _ = io::stdout().flush();
-    redraw_preview(&input);
 
     let _guard = RawModeGuard::enable()?;
+    redraw_prompt_and_preview(prompt, &input, &preview_of)?;
 
     loop {
         if event::poll(std::time::Duration::from_millis(100))? {
@@ -442,13 +518,12 @@ fn read_input_interactive(
                         // right place and the length limits mean what they say.
                         if char_validator(c, input.chars().count()) {
                             input.push(c);
-                            redraw_prompt_and_preview(prompt, &input, &redraw_preview)?;
+                            redraw_prompt_and_preview(prompt, &input, &preview_of)?;
                         }
                     }
                     KeyCode::Backspace => {
-                        if !input.is_empty() {
-                            input.pop();
-                            redraw_prompt_and_preview(prompt, &input, &redraw_preview)?;
+                        if input.pop().is_some() {
+                            redraw_prompt_and_preview(prompt, &input, &preview_of)?;
                         }
                     }
                     KeyCode::Enter => {
@@ -464,9 +539,10 @@ fn read_input_interactive(
     }
 
     drop(_guard);
+    // step past the preview row so whatever prints next doesn't land on top of it.
     print!("\r\n\r\n");
     let _ = io::stdout().flush();
-    
+
     Ok(Some(input))
 }
 

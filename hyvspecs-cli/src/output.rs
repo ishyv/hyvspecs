@@ -21,6 +21,58 @@ pub fn color(code: &str) -> &str {
     }
 }
 
+/// the glyph set, with an ascii fallback. box-drawing and ▸/✓/·/× are mojibake on a terminal
+/// that isn't prepared for utf-8, and a garbled frame is worse than a plain one.
+pub struct Glyphs {
+    pub arrow: &'static str,
+    pub check: &'static str,
+    pub tl: &'static str,
+    pub tr: &'static str,
+    pub bl: &'static str,
+    pub br: &'static str,
+    pub h: &'static str,
+    pub v: &'static str,
+    pub dot: &'static str,
+    pub times: &'static str,
+}
+
+pub fn glyphs() -> Glyphs {
+    if ascii_only() {
+        Glyphs { arrow: ">", check: "+", tl: "+", tr: "+", bl: "+", br: "+", h: "-", v: "|", dot: "-", times: "x" }
+    } else {
+        Glyphs {
+            arrow: "\u{25b8}",
+            check: "\u{2713}",
+            tl: "\u{250c}",
+            tr: "\u{2510}",
+            bl: "\u{2514}",
+            br: "\u{2518}",
+            h: "\u{2500}",
+            v: "\u{2502}",
+            dot: "\u{b7}",
+            times: "\u{d7}",
+        }
+    }
+}
+
+fn ascii_only() -> bool {
+    if std::env::var_os("HYVSPECS_ASCII").is_some() {
+        return true;
+    }
+    // an explicitly non-utf8 locale (C/POSIX) means box drawing won't render. an *unset* locale
+    // is left alone — most modern terminals are utf-8 and we'd rather not degrade the default.
+    for key in ["LC_ALL", "LC_CTYPE", "LANG"] {
+        if let Ok(v) = std::env::var(key) {
+            if v.is_empty() {
+                continue;
+            }
+            let v = v.to_uppercase();
+            return !(v.contains("UTF-8") || v.contains("UTF8"));
+        }
+    }
+    false
+}
+
 pub fn to_json(payload: &Payload) -> anyhow::Result<String> {
     Ok(serde_json::to_string_pretty(payload)?)
 }
@@ -59,6 +111,7 @@ pub fn print_summary(payload: &Payload) {
 /// the thing you came for." gold url, teal marker + verified badge; nothing else.
 pub fn print_link(url: &str, verified: bool) {
     let (gold, signal, dim, reset) = (color(GOLD), color(SIGNAL), color(DIM), color(RESET));
+    let g = glyphs();
 
     // show the address without its scheme — cleaner, still recognised and clickable.
     let display = url
@@ -73,15 +126,16 @@ pub fn print_link(url: &str, verified: bool) {
     let status_w = status.chars().count();
     let gap = 4;
     let inner = left_w + status_w + gap + 4; // + 2 spaces padding each side
-    let bar = "\u{2500}".repeat(inner);
+    let bar = g.h.repeat(inner);
     let spaces = " ".repeat(gap);
 
     println!();
-    println!("  {dim}\u{250c}{bar}\u{2510}{reset}");
+    println!("  {dim}{}{bar}{}{reset}", g.tl, g.tr);
     println!(
-        "  {dim}\u{2502}{reset}  {signal}\u{25b8}{reset} {gold}{display}{reset}{spaces}{status_color}{status}{reset}  {dim}\u{2502}{reset}"
+        "  {dim}{}{reset}  {signal}{}{reset} {gold}{display}{reset}{spaces}{status_color}{status}{reset}  {dim}{}{reset}",
+        g.v, g.arrow, g.v
     );
-    println!("  {dim}\u{2514}{bar}\u{2518}{reset}");
+    println!("  {dim}{}{bar}{}{reset}", g.bl, g.br);
     println!();
 }
 
@@ -97,14 +151,15 @@ fn row(dim: &str, reset: &str, label: &str, value: &str) {
 }
 
 fn cpu_line(p: &Payload) -> String {
+    let dot = glyphs().dot;
     let cpu = &p.cpu;
     let mut s = cpu.model.clone();
     match cpu.cores_physical {
-        Some(phys) => s.push_str(&format!(" \u{b7} {phys}c/{}t", cpu.cores_logical)),
-        None => s.push_str(&format!(" \u{b7} {}t", cpu.cores_logical)),
+        Some(phys) => s.push_str(&format!(" {dot} {phys}c/{}t", cpu.cores_logical)),
+        None => s.push_str(&format!(" {dot} {}t", cpu.cores_logical)),
     }
     if let Some(mhz) = cpu.clock_max_mhz {
-        s.push_str(&format!(" \u{b7} {:.1} ghz", mhz as f64 / 1000.0));
+        s.push_str(&format!(" {dot} {:.1} ghz", mhz as f64 / 1000.0));
     }
     s
 }
@@ -112,12 +167,13 @@ fn cpu_line(p: &Payload) -> String {
 fn gpu_line(p: &Payload, i: usize) -> String {
     let gpu = &p.gpus[i];
     match gpu.vram_mb {
-        Some(vram) => format!("{} \u{b7} {}", gpu.model, capacity(vram)),
+        Some(vram) => format!("{} {} {}", gpu.model, glyphs().dot, capacity(vram)),
         None => gpu.model.clone(),
     }
 }
 
 fn ram_line(ram: &Ram) -> String {
+    let g = glyphs();
     let total = capacity(ram.total_mb);
     if ram.modules.is_empty() {
         return total;
@@ -135,10 +191,10 @@ fn ram_line(ram: &Ram) -> String {
 
     let detail = counts
         .iter()
-        .map(|(desc, n)| format!("{n} \u{d7} {desc}"))
+        .map(|(desc, n)| format!("{n} {} {desc}", g.times))
         .collect::<Vec<_>>()
         .join(", ");
-    format!("{total} \u{b7} {detail}")
+    format!("{total} {} {detail}", g.dot)
 }
 
 fn drive_line(p: &Payload) -> String {
@@ -149,7 +205,7 @@ fn drive_line(p: &Payload) -> String {
         .iter()
         .map(|d| format!("{} {}", capacity(d.size_mb), drive_kind(d.kind)))
         .collect::<Vec<_>>()
-        .join(" \u{b7} ")
+        .join(&format!(" {} ", glyphs().dot))
 }
 
 fn drive_kind(kind: DriveKind) -> &'static str {
