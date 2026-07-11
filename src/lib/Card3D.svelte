@@ -2,11 +2,16 @@
 	import { onMount } from 'svelte';
 	import {
 		ACESFilmicToneMapping,
+		AdditiveBlending,
 		AmbientLight,
 		Box3,
+		BufferGeometry,
 		Color,
+		Float32BufferAttribute,
 		Group,
 		HemisphereLight,
+		Line,
+		LineBasicMaterial,
 		Mesh,
 		MeshBasicMaterial,
 		MeshStandardMaterial,
@@ -15,6 +20,7 @@
 		PlaneGeometry,
 		PMREMGenerator,
 		PointLight,
+		Raycaster,
 		Scene,
 		Vector2,
 		Vector3,
@@ -117,21 +123,43 @@
 		// roll off instead of clipping to flat white.
 		composer.addPass(new OutputPass());
 
-		const stage = buildStage(scene, glow, profile.visual.energy, rng, theme.name, key, rim);
+		const stage = buildStage(
+			scene,
+			glow,
+			profile.visual.energy,
+			profile.visual.density,
+			rng,
+			theme.name,
+			key,
+			rim
+		);
 
 		// assemble the loadout, then place each piece. a label is pinned to every part's anchor
 		// so name + value travel with it. positions are loose; a fit pass scales to frame after.
 		const content = new Group();
 		const spinners: Array<(t: number) => void> = [];
 		const breath: MeshStandardMaterial[] = [];
-		const labels: Array<{ anchor: Object3D; name: string; value: string }> = [];
+
+		// each part stays individually addressable: `object` for raycasting and the hover lift,
+		// [m0,m1) is its slice of `breath` so a hovered part can be brightened on its own, and
+		// `hl` is the eased 0..1 highlight the tick loop drives.
+		const parts: Array<{
+			object: Group;
+			anchor: Object3D;
+			name: string;
+			value: string;
+			m0: number;
+			m1: number;
+			hl: number;
+		}> = [];
 
 		const place = (part: Part, x: number, y: number, name: string, value: string) => {
 			part.object.position.set(x, y, 0);
 			content.add(part.object);
+			const m0 = breath.length;
 			breath.push(...part.materials);
 			if (part.spin) spinners.push(part.spin);
-			labels.push({ anchor: part.anchor, name, value });
+			parts.push({ object: part.object, anchor: part.anchor, name, value, m0, m1: breath.length, hl: 0 });
 		};
 
 		const isMobile = host.clientWidth / host.clientHeight < 0.9;
@@ -216,8 +244,64 @@
 			rig.scale.setScalar(Math.min((halfW * 0.84) / hx, (halfH * 0.7) / hy));
 		};
 
+		// overdrive: at the very top of the gradient the rig starts ARCING — thin filaments of
+		// current snapping between the hero and the other blocks. this is the "ascension" the
+		// score has always promised (visual.overdrive) and that nothing ever read. the arcs live
+		// in `content`, so they ride the rig's rotation with the parts they connect.
+		const SEG = 10;
+		const arcs: Array<{ geo: BufferGeometry; line: Line; a: Vector3; b: Vector3 }> = [];
+		if (profile.visual.overdrive && parts.length > 1) {
+			scene.updateMatrixWorld(true);
+			const at = (i: number) => content.worldToLocal(parts[i].anchor.getWorldPosition(new Vector3()));
+			const hero = at(0); // the gpu is placed first and is the loudest thing on the board
+			// webgl ignores line width, so presence has to come from brightness: push the card's
+			// glow toward white so the filament clears the bloom threshold and blooms as an arc.
+			const arcMat = new LineBasicMaterial({
+				color: glow.clone().lerp(new Color(0xffffff), 0.5),
+				transparent: true,
+				opacity: 1,
+				blending: AdditiveBlending, // reads as light, not as a wire
+				depthWrite: false
+			});
+			for (let i = 1; i < parts.length; i++) {
+				const geo = new BufferGeometry();
+				geo.setAttribute('position', new Float32BufferAttribute(new Float32Array((SEG + 1) * 3), 3));
+				const line = new Line(geo, arcMat);
+				line.visible = false;
+				content.add(line);
+				arcs.push({ geo, line, a: hero, b: at(i) });
+			}
+		}
+
+		// deterministic jitter: a hash, not the seeded rng, so the arcs don't consume the build
+		// stream — the same seed still yields the same card.
+		const jit = (a: number, b: number) => {
+			const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453;
+			return s - Math.floor(s) - 0.5;
+		};
+		const crackle = (t: number) => {
+			const frame = Math.floor(t * 22); // re-strike a few times a second
+			for (let k = 0; k < arcs.length; k++) {
+				const arc = arcs[k];
+				// mostly dark, snapping on — an arc that's always lit is a wire, not a spark.
+				const on = Math.sin(t * (5.5 + k * 2.3) + k * 1.7) > 0.68;
+				arc.line.visible = on;
+				if (!on) continue;
+				const p = arc.geo.attributes.position;
+				const arr = p.array as Float32Array;
+				for (let s = 0; s <= SEG; s++) {
+					const f = s / SEG;
+					const amp = Math.sin(f * Math.PI) * 0.26; // pinned at both ends, wild in the middle
+					arr[s * 3] = arc.a.x + (arc.b.x - arc.a.x) * f + jit(s + k * 31, frame) * amp;
+					arr[s * 3 + 1] = arc.a.y + (arc.b.y - arc.a.y) * f + jit(s + k * 31 + 7, frame) * amp;
+					arr[s * 3 + 2] = arc.a.z + (arc.b.z - arc.a.z) * f + jit(s + k * 31 + 13, frame) * amp;
+				}
+				p.needsUpdate = true;
+			}
+		};
+
 		// one html label per part, projected from its 3d anchor each frame so it tracks parallax.
-		const els = labels.map((l) => {
+		const els = parts.map((l) => {
 			const el = document.createElement('div');
 			el.className = 'plabel';
 
@@ -236,12 +320,30 @@
 		});
 		const tmp = new Vector3();
 		const projectLabels = (w: number, h: number) => {
-			for (let i = 0; i < labels.length; i++) {
-				labels[i].anchor.getWorldPosition(tmp).project(camera);
+			for (let i = 0; i < parts.length; i++) {
+				parts[i].anchor.getWorldPosition(tmp).project(camera);
 				const behind = tmp.z > 1;
 				els[i].style.opacity = behind ? '0' : '1';
 				els[i].style.transform = `translate(-50%, -100%) translate(${(tmp.x * 0.5 + 0.5) * w}px, ${(-tmp.y * 0.5 + 0.5) * h}px)`;
 			}
+		};
+
+		// hover-to-inspect: raycast the pointer at the loadout and light up whichever block it
+		// lands on, plus its label. the card stops being a diorama you spin and becomes a thing
+		// you can read part by part (legibility is the first law).
+		const raycaster = new Raycaster();
+		const ndc = new Vector2();
+		let hovered = -1;
+		const pickAt = (e: PointerEvent) => {
+			const r = host.getBoundingClientRect();
+			ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+			raycaster.setFromCamera(ndc, camera);
+			const hit = raycaster.intersectObjects(content.children, true)[0];
+			if (!hit) return -1;
+			// walk up from the hit mesh to the part group that sits directly under `content`.
+			let o: Object3D | null = hit.object;
+			while (o && o.parent !== content) o = o.parent;
+			return o ? parts.findIndex((p) => p.object === o) : -1;
 		};
 
 		// idle: fans spin, an emissive breath at the power's energy, slow particle drift.
@@ -279,7 +381,19 @@
 				if (Math.abs(velY) < 0.0006) rig.rotation.y += 0.0016;
 			}
 			for (const s of spinners) s(t);
-			breath.forEach((m, i) => (m.emissiveIntensity = base[i] * b));
+
+			// global breath × per-part hover lift. a hovered block eases up in emissive and size;
+			// everything else eases back down, so attention has somewhere to land.
+			for (let j = 0; j < parts.length; j++) {
+				const p = parts[j];
+				p.hl += ((hovered === j ? 1 : 0) - p.hl) * 0.16;
+				const lift = 1 + p.hl * 0.85;
+				for (let i = p.m0; i < p.m1; i++) breath[i].emissiveIntensity = base[i] * b * lift;
+				p.object.scale.setScalar(1 + p.hl * 0.05);
+				els[j].classList.toggle('hot', p.hl > 0.5);
+			}
+
+			if (arcs.length) crackle(t);
 			if (stage.animate) {
 				stage.animate(t);
 			} else {
@@ -307,7 +421,13 @@
 			}
 		};
 		const onMove = (e: PointerEvent) => {
-			if (!dragging) return;
+			if (!dragging) {
+				// idle pointer: inspect whatever is under it.
+				hovered = pickAt(e);
+				host.style.cursor = hovered >= 0 ? 'pointer' : 'grab';
+				return;
+			}
+			hovered = -1; // spinning the rig, not reading it
 			velY = (e.clientX - lastX) * 0.006;
 			velX = (e.clientY - lastY) * 0.006;
 			lastX = e.clientX;
@@ -319,9 +439,13 @@
 			dragging = false;
 			host.style.cursor = 'grab';
 		};
+		const onLeave = () => {
+			hovered = -1;
+		};
 		host.style.cursor = 'grab';
 		host.addEventListener('pointerdown', onDown);
 		host.addEventListener('pointermove', onMove);
+		host.addEventListener('pointerleave', onLeave);
 		window.addEventListener('pointerup', onUp);
 
 		const resize = () => {
@@ -340,6 +464,7 @@
 			cancelAnimationFrame(raf);
 			host.removeEventListener('pointerdown', onDown);
 			host.removeEventListener('pointermove', onMove);
+			host.removeEventListener('pointerleave', onLeave);
 			window.removeEventListener('pointerup', onUp);
 			ro.disconnect();
 			for (const el of els) el.remove();
@@ -449,12 +574,37 @@
 	.labels :global(.plabel .lv) {
 		font-size: 0.82rem;
 		letter-spacing: 0.02em;
-		color: #e8ebee;
+		color: var(--text-bright);
 		width: 100%;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		text-align: center;
 		white-space: nowrap;
+	}
+
+	/* the label of the block under the pointer: brought forward with the part it names, so
+	   inspecting one component reads as a single gesture instead of two disconnected ones. */
+	.labels :global(.plabel .ln),
+	.labels :global(.plabel .lv),
+	.labels :global(.plabel::before),
+	.labels :global(.plabel::after) {
+		transition:
+			color 0.18s var(--ease),
+			background 0.18s var(--ease),
+			transform 0.18s var(--ease);
+	}
+	.labels :global(.plabel.hot .ln) {
+		color: var(--text);
+	}
+	.labels :global(.plabel.hot .lv) {
+		color: #fff;
+	}
+	.labels :global(.plabel.hot::before) {
+		background: #fff;
+		transform: translateX(-50%) scale(1.6);
+	}
+	.labels :global(.plabel.hot::after) {
+		background: linear-gradient(to bottom, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0));
 	}
 	.vignette {
 		position: absolute;

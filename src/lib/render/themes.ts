@@ -17,6 +17,8 @@ export interface Theme {
 	corrosion: number; // 0..1 surface noise/decay (drives vertex jitter + bump later)
 	ambient: number; // scene ambient light for this world
 	emissive: number; // base self-illumination floor (rust barely glows, divine emits)
+	clearcoat: number; // 0..1 lacquer layer. a second specular over the metal — what makes the
+	// top worlds read as *wet gold* rather than yellow paint. rust has none.
 }
 
 interface Stop extends Omit<Theme, 'metal'> {
@@ -28,11 +30,11 @@ interface Stop extends Omit<Theme, 'metal'> {
 // raised floor so even rust reads (legibility > mood); emissive top is held back since filmic
 // tone mapping + accent multipliers push the highlights — keeps divine metal from going flat.
 const STOPS: Stop[] = [
-	{ at: 0.12, name: 'rust', metal: 0x4a3526, roughness: 0.95, metalness: 0.4, corrosion: 0.9, ambient: 0.34, emissive: 0.16 },
-	{ at: 0.35, name: 'iron', metal: 0x55555e, roughness: 0.7, metalness: 0.72, corrosion: 0.5, ambient: 0.4, emissive: 0.24 },
-	{ at: 0.55, name: 'overcharge', metal: 0x7a5a28, roughness: 0.48, metalness: 0.86, corrosion: 0.45, ambient: 0.44, emissive: 0.4 },
-	{ at: 0.74, name: 'alloy', metal: 0x747a82, roughness: 0.28, metalness: 0.93, corrosion: 0.18, ambient: 0.5, emissive: 0.5 },
-	{ at: 0.92, name: 'divine', metal: 0xd8bd82, roughness: 0.13, metalness: 1.0, corrosion: 0.0, ambient: 0.56, emissive: 0.62 }
+	{ at: 0.12, name: 'rust', metal: 0x4a3526, roughness: 0.95, metalness: 0.4, corrosion: 0.9, ambient: 0.34, emissive: 0.16, clearcoat: 0 },
+	{ at: 0.35, name: 'iron', metal: 0x55555e, roughness: 0.7, metalness: 0.72, corrosion: 0.5, ambient: 0.4, emissive: 0.24, clearcoat: 0 },
+	{ at: 0.55, name: 'overcharge', metal: 0x7a5a28, roughness: 0.48, metalness: 0.86, corrosion: 0.45, ambient: 0.44, emissive: 0.4, clearcoat: 0.12 },
+	{ at: 0.74, name: 'alloy', metal: 0x747a82, roughness: 0.28, metalness: 0.93, corrosion: 0.18, ambient: 0.5, emissive: 0.5, clearcoat: 0.4 },
+	{ at: 0.92, name: 'divine', metal: 0xd8bd82, roughness: 0.13, metalness: 1.0, corrosion: 0.0, ambient: 0.56, emissive: 0.62, clearcoat: 0.9 }
 ];
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -55,7 +57,8 @@ export function resolveTheme(e: number): Theme {
 		metalness: lerp(lo.metalness, hi.metalness, t),
 		corrosion: lerp(lo.corrosion, hi.corrosion, t),
 		ambient: lerp(lo.ambient, hi.ambient, t),
-		emissive: lerp(lo.emissive, hi.emissive, t)
+		emissive: lerp(lo.emissive, hi.emissive, t),
+		clearcoat: lerp(lo.clearcoat, hi.clearcoat, t)
 	};
 }
 
@@ -69,15 +72,19 @@ interface ColorPalette {
 	warm: number;
 }
 
+// eight seeded palettes. pulled back off pure neon: fully-saturated primaries (0x00f3ff,
+// 0xff007f) blow straight past the bloom threshold and read as highlighter smeared over the
+// metal. these are richer and slightly desaturated, so they read as *light being emitted by a
+// surface* — which keeps the metal legible underneath and the whole card looking forged.
 const PALETTES: ColorPalette[] = [
-	{ name: 'cyberpunk', cool: 0x00f3ff, warm: 0xff007f },    // Neon Cyan to Neon Pink/Magenta
-	{ name: 'emerald', cool: 0x00ff88, warm: 0x00bbff },      // Mint/Emerald to Ocean Cyan
-	{ name: 'orange-fyre', cool: 0xffaa00, warm: 0xff3300 },  // Amber Orange to Blazing Crimson
-	{ name: 'ocean-breeze', cool: 0x0055ff, warm: 0x00e1d9 }, // Cobalt Blue to Ocean Turquoise
-	{ name: 'toxic-acid', cool: 0xadff2f, warm: 0xffd700 },   // Lime Green to Golden Yellow
-	{ name: 'quantum-blue', cool: 0x9900ff, warm: 0x00ffff }, // Royal Purple to Electric Cyan
-	{ name: 'monochrome', cool: 0x778899, warm: 0xffffff },   // Cool Slate to Radiant White
-	{ name: 'copper-rust', cool: 0x8b4513, warm: 0xff4500 }   // Saddle Brown to Neon Red-Orange
+	{ name: 'cyberpunk', cool: 0x2ad4e8, warm: 0xe8357f },    // iced cyan → hot magenta
+	{ name: 'emerald', cool: 0x2fe08a, warm: 0x27bce0 },      // mint → ocean cyan
+	{ name: 'ember', cool: 0xe8a63c, warm: 0xe84a24 },        // amber → forge crimson
+	{ name: 'ocean', cool: 0x3d7be0, warm: 0x2fd0c8 },        // cobalt → turquoise
+	{ name: 'acid', cool: 0xb4e04a, warm: 0xe8c33c },         // lime → golden
+	{ name: 'quantum', cool: 0x8a5ce8, warm: 0x3fcfe8 },      // violet → electric cyan
+	{ name: 'monochrome', cool: 0x8f9aa8, warm: 0xf2f0ea },   // cool slate → warm white
+	{ name: 'copper', cool: 0xa06238, warm: 0xe85f2a }        // patina → molten copper
 ];
 
 // the signal/glow colour — continuous, decoupled from the world.

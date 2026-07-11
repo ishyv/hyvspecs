@@ -146,16 +146,21 @@ export function sticker(rng: Rng, title: string, sub: string): CanvasTexture {
 // a circuit-board backdrop: traces, pads and vias in the tier glow on a dark board, so the
 // loadout reads as sitting on a real motherboard rather than floating in a void. seeded, so
 // the board is the card's own.
-export function pcbTexture(rng: Rng, glow: Color): CanvasTexture {
+export function pcbTexture(rng: Rng, glow: Color, density: number): CanvasTexture {
 	const S = 512;
 	const [c, x] = canvas(S);
 	x.fillStyle = '#080b0a';
 	x.fillRect(0, 0, S, S);
 	const g = `#${glow.getHexString()}`;
 
+	// `density` is score.ts's visual.density (0.25..1). a weak rig gets a sparse, near-dead
+	// board; a monster gets a dense, busy one. it was computed every frame and read by nobody.
+	const traces = Math.round(28 + density * 95);
+	const vias = Math.round(55 + density * 165);
+
 	// right-angled copper traces.
 	x.lineWidth = 1.5;
-	for (let i = 0; i < 70; i++) {
+	for (let i = 0; i < traces; i++) {
 		let px = range(rng, 0, S);
 		let py = range(rng, 0, S);
 		x.strokeStyle = hexA(g, range(rng, 0.15, 0.45));
@@ -170,7 +175,7 @@ export function pcbTexture(rng: Rng, glow: Color): CanvasTexture {
 		x.stroke();
 	}
 	// pads / vias.
-	for (let i = 0; i < 140; i++) {
+	for (let i = 0; i < vias; i++) {
 		x.fillStyle = hexA(g, range(rng, 0.2, 0.6));
 		x.beginPath();
 		x.arc(range(rng, 0, S), range(rng, 0, S), range(rng, 1.2, 3), 0, 6.283);

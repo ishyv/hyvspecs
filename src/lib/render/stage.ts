@@ -30,6 +30,7 @@ export function buildStage(
 	scene: Scene,
 	glow: Color,
 	energy: number,
+	density: number,
 	rng: Rng,
 	themeName: string,
 	keyLight: PointLight,
@@ -39,8 +40,9 @@ export function buildStage(
 	scene.fog = new Fog(0x08080a, 8, 24);
 
 	// a motherboard the loadout sits on — the backdrop now *represents the rig*, traces glowing
-	// in the tier colour, brighter with power. fog sinks its edges into the dark.
-	const pcb = pcbTexture(rng, glow);
+	// in the tier colour, brighter with power, and denser with the score's `density`. fog sinks
+	// its edges into the dark.
+	const pcb = pcbTexture(rng, glow, density);
 	pcb.repeat.set(3, 2);
 	const board = new Mesh(
 		new PlaneGeometry(40, 24),
