@@ -25,10 +25,11 @@ body {
 	text-rendering: optimizeLegibility;
 }
 
-/* the app is a set of single-viewport instruments; nothing scrolls the document body.
-   individual scroll regions opt back in locally. */
+/* card + error pages are single-viewport instruments that clip via their own fixed frames;
+   the landing is a normal document that may scroll on short screens. so only kill horizontal
+   overflow globally and let each page own its vertical behaviour. */
 body {
-	overflow: hidden;
+	overflow-x: hidden;
 }
 
 ::selection {

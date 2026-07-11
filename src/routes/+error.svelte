@@ -1,21 +1,32 @@
 <script lang="ts">
 	import { page } from '$app/state';
+
+	// a missing card is the common, expected failure for a share product (expired/typo'd link),
+	// so 404 gets its own on-brand "signal lost" state with a way back, distinct from a real fault.
+	const is404 = $derived(page.status === 404);
+	const prefix = $derived(is404 ? 'signal.lost' : 'system.err');
+	const detail = $derived(
+		is404
+			? 'no card answers at this address. it may have been deleted, or never existed.'
+			: (page.error?.message ?? 'unknown signal interruption')
+	);
+	const probe = $derived(is404 ? '> locate_card' : '> check_signal');
 </script>
 
 <div class="frame">
-	<main class="error-container">
+	<main class="panel">
 		<header>
-			<span class="prefix">system.err</span>
+			<span class="prefix">{prefix}</span>
 			<span class="status">/{page.status}</span>
 		</header>
 
 		<div class="body">
 			<div class="terminal">
-				<p class="prompt">&gt; check_signal</p>
-				<p class="response">{page.error?.message ?? 'unknown signal interruption'}</p>
+				<p class="probe">{probe}</p>
+				<p class="detail">{detail}</p>
 			</div>
 
-			<a href="/" class="home-link">return_to_base</a>
+			<a href="/" class="home-link">{is404 ? 'generate_your_own' : 'return_to_base'}</a>
 		</div>
 	</main>
 </div>
@@ -31,10 +42,12 @@
 		background: var(--bg);
 		z-index: 1000;
 	}
-	.error-container {
-		width: 320px;
+	.panel {
+		width: 360px;
+		max-width: calc(100vw - 3rem);
 		background: var(--bg-raised);
 		border: 1px solid var(--line);
+		border-top: 2px solid var(--accent);
 		padding: 2rem;
 		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 		display: flex;
@@ -52,6 +65,7 @@
 		font-size: 1.1rem;
 		color: var(--accent);
 		font-weight: 500;
+		letter-spacing: 0.02em;
 	}
 	.status {
 		font-size: 0.9rem;
@@ -65,31 +79,37 @@
 	.terminal {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: 0.6rem;
 	}
-	.prompt {
+	.probe {
 		color: var(--dim);
 		font-size: 0.85rem;
+		margin: 0;
 	}
-	.response {
+	.detail {
 		color: var(--text-bright);
 		font-size: 0.95rem;
-		line-height: 1.4;
+		line-height: 1.5;
+		margin: 0;
 	}
 	.home-link {
 		display: inline-block;
 		text-align: center;
 		border: 1px solid var(--line);
 		background: var(--n-900);
-		padding: 0.6rem;
+		padding: 0.7rem;
 		color: var(--signal);
 		text-decoration: none;
 		font-size: 0.85rem;
 		letter-spacing: 0.05em;
-		transition: all 0.2s var(--ease);
+		transition:
+			border-color 0.2s var(--ease),
+			background 0.2s var(--ease);
 	}
-	.home-link:hover {
+	.home-link:hover,
+	.home-link:focus-visible {
 		border-color: var(--signal);
 		background: #142223;
+		outline: none;
 	}
 </style>

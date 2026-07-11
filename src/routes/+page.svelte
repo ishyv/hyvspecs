@@ -13,7 +13,9 @@
 	onMount(() => {
 		const ctx = canvas.getContext('2d')!;
 		let animationId = 0;
-		
+		// respect reduced-motion: draw one still frame instead of the drifting starfield.
+		const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 		const resize = () => {
 			canvas.width = window.innerWidth;
 			canvas.height = window.innerHeight;
@@ -100,7 +102,7 @@
 				}
 			}
 
-			animationId = requestAnimationFrame(tick);
+			if (!reduced) animationId = requestAnimationFrame(tick);
 		};
 		tick();
 
@@ -158,7 +160,7 @@
 					<span class="term-dot yellow"></span>
 					<span class="term-dot green"></span>
 					<span class="term-title">terminal — command</span>
-					<span class="term-action">{copied ? 'COPIED!' : 'CLICK TO COPY'}</span>
+					<span class="term-action" class:done={copied} aria-live="polite">{copied ? 'COPIED!' : 'CLICK TO COPY'}</span>
 				</div>
 				<div class="term-body">
 					<div class="line">
@@ -186,18 +188,12 @@
 </div>
 
 <style>
-	:global(html, body) {
-		margin: 0;
-		padding: 0;
-		background: #08080a;
-		overflow-x: hidden;
-	}
 	.landing {
 		position: relative;
 		min-height: 100vh;
-		width: 100vw;
-		color: #e8ebee;
-		font-family: 'IBM Plex Mono', ui-monospace, monospace;
+		width: 100%;
+		color: var(--text-bright);
+		font-family: var(--font-mono);
 		display: flex;
 		justify-content: center;
 		align-items: center;
@@ -234,21 +230,21 @@
 		font-weight: 700;
 		letter-spacing: 0.08em;
 		text-transform: lowercase;
-		color: #f1f2f4;
+		color: var(--text-bright);
 		text-shadow: 0 0 20px rgba(255, 255, 255, 0.12);
 		line-height: 1;
 	}
 	.tagline {
 		font-size: 0.75rem;
 		letter-spacing: 0.32em;
-		color: #8a9097;
+		color: var(--muted);
 		text-transform: uppercase;
 		margin-bottom: 0.5rem;
 	}
 	.description {
 		font-size: 0.88rem;
 		line-height: 1.6;
-		color: #8a9097;
+		color: var(--muted);
 		max-width: 480px;
 		margin: 0;
 	}
@@ -260,14 +256,14 @@
 		background: rgba(12, 12, 14, 0.6);
 		backdrop-filter: blur(12px);
 		-webkit-backdrop-filter: blur(12px);
-		border: 1px solid #1c1d24;
+		border: 1px solid var(--line-soft);
 		padding: 1.8rem;
 		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 	}
 	h2 {
 		font-size: 0.72rem;
 		letter-spacing: 0.18em;
-		color: #d6a85a;
+		color: var(--accent);
 		margin: 0 0 0.5rem 0;
 		text-transform: uppercase;
 	}
@@ -284,36 +280,36 @@
 	.step-num {
 		font-size: 1.1rem;
 		font-weight: bold;
-		color: #3b3c45;
+		color: var(--accent-dim);
 		line-height: 1.2;
 	}
 	.step-body h3 {
 		font-size: 0.82rem;
 		font-weight: bold;
-		color: #e8ebee;
+		color: var(--text-bright);
 		margin: 0 0 0.2rem 0;
 		letter-spacing: 0.04em;
 	}
 	.step-body p {
 		font-size: 0.76rem;
-		color: #8a9097;
+		color: var(--muted);
 		margin: 0;
 		line-height: 1.4;
 	}
 
 	.terminal {
-		background: #040406;
-		border: 1px solid #26282e;
+		background: var(--bg-sunken);
+		border: 1px solid var(--line);
 		margin-top: 0.5rem;
 		cursor: pointer;
 		outline: none;
 	}
 	.terminal:focus-visible {
-		border-color: #d6a85a;
+		border-color: var(--accent);
 	}
 	.term-header {
-		background: #0d0d11;
-		border-bottom: 1px solid #1c1d24;
+		background: var(--bg-raised);
+		border-bottom: 1px solid var(--line-soft);
 		display: flex;
 		align-items: center;
 		padding: 0.4rem 0.8rem;
@@ -329,7 +325,7 @@
 	.term-dot.green { background: #5ce588; }
 	.term-title {
 		font-size: 0.62rem;
-		color: #4b4d56;
+		color: var(--n-600);
 		margin-left: 0.5rem;
 		flex-grow: 1;
 		letter-spacing: 0.05em;
@@ -337,8 +333,12 @@
 	.term-action {
 		font-size: 0.6rem;
 		letter-spacing: 0.08em;
-		color: #8a9097;
+		color: var(--muted);
 		font-weight: bold;
+		transition: color 0.2s var(--ease);
+	}
+	.term-action.done {
+		color: var(--signal);
 	}
 	.term-body {
 		padding: 0.9rem 1.2rem;
@@ -353,23 +353,23 @@
 		gap: 0.6rem;
 	}
 	.prompt {
-		color: #3b3c45;
+		color: var(--accent);
 		user-select: none;
 	}
 	.cmd {
-		color: #e8ebee;
+		color: var(--text-bright);
 	}
 	.line.output {
-		color: #6a7178;
+		color: var(--dim);
 		padding-left: 1.1rem;
 	}
 	.line.success {
-		color: #5ce588;
+		color: var(--signal);
 		padding-left: 1.1rem;
 	}
 	.url {
 		text-decoration: underline;
-		color: #8ae8e2;
+		color: var(--signal);
 	}
 
 	.actions {
@@ -392,21 +392,25 @@
 		font-family: inherit;
 	}
 	.btn.primary {
-		background: #e8ebee;
-		color: #08080a;
+		background: var(--text-bright);
+		color: var(--bg);
 	}
-	.btn.primary:hover {
+	.btn.primary:hover,
+	.btn.primary:focus-visible {
 		background: #ffffff;
 		box-shadow: 0 0 16px rgba(255, 255, 255, 0.2);
+		outline: none;
 	}
 	.btn.secondary {
-		border: 1px solid #26282e;
-		color: #8a9097;
+		border: 1px solid var(--line);
+		color: var(--muted);
 		background: rgba(8, 8, 10, 0.5);
 	}
-	.btn.secondary:hover {
-		border-color: #8a9097;
-		color: #e8ebee;
+	.btn.secondary:hover,
+	.btn.secondary:focus-visible {
+		border-color: var(--muted);
+		color: var(--text-bright);
+		outline: none;
 	}
 
 	@media (max-width: 480px) {
