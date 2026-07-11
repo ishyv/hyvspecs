@@ -31,9 +31,14 @@ impl Drop for RawModeGuard {
 
 fn main() {
     if let Err(err) = run() {
-        let (dim, reset) = (output::color("\x1b[38;5;240m"), output::color("\x1b[0m"));
+        // gold, not red — the palette is gold + teal + dim, nothing else, even for faults.
+        let (gold, dim, reset) = (
+            output::color("\x1b[38;5;179m"),
+            output::color("\x1b[38;5;240m"),
+            output::color("\x1b[0m"),
+        );
         eprintln!();
-        eprintln!("  \x1b[31merror\x1b[0m: {}", err);
+        eprintln!("  {gold}error{reset}: {}", err);
         let mut source = err.source();
         while let Some(src) = source {
             eprintln!("  {}context: {}{}", dim, src, reset);
@@ -375,11 +380,19 @@ fn claim(card_id: &str) -> Result<()> {
 }
 
 fn delete(card_id: &str) -> Result<()> {
+    let (signal, gold, reset) = (
+        output::color("\x1b[38;5;37m"),
+        output::color("\x1b[38;5;179m"),
+        output::color("\x1b[0m"),
+    );
     let Some(token) = config::token_for(card_id) else {
         bail!("no edit token stored for {card_id} on this machine");
     };
     upload::delete_showcase(&config::endpoint(), card_id, &token)?;
-    println!("deleted {card_id}");
+    // match the house style the rest of the cli uses, instead of a bare unstyled line.
+    println!();
+    println!("  {signal}\u{2713}{reset} deleted {gold}{card_id}{reset}");
+    println!();
     Ok(())
 }
 
@@ -425,7 +438,9 @@ fn read_input_interactive(
                         return Ok(None);
                     }
                     KeyCode::Char(c) => {
-                        if char_validator(c, input.len()) {
+                        // count characters, not bytes, so multibyte input hits the cap at the
+                        // right place and the length limits mean what they say.
+                        if char_validator(c, input.chars().count()) {
                             input.push(c);
                             redraw_prompt_and_preview(prompt, &input, &redraw_preview)?;
                         }

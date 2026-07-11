@@ -1,7 +1,8 @@
 //! terminal output. metallic and minimal: lowercase, mono feel, terse.
-//! hand-rolled ansi, suppressed when NO_COLOR is set.
+//! hand-rolled ansi, suppressed when NO_COLOR is set or stdout isn't a tty.
 
 use std::collections::BTreeMap;
+use std::io::IsTerminal;
 
 use crate::payload::{DriveKind, Payload, Ram};
 
@@ -11,7 +12,9 @@ const DIM: &str = "\x1b[38;5;240m";
 const RESET: &str = "\x1b[0m";
 
 pub fn color(code: &str) -> &str {
-    if std::env::var_os("NO_COLOR").is_some() {
+    // honour NO_COLOR, and also stay silent when piped/redirected so a captured stream is
+    // clean text rather than a soup of escape codes.
+    if std::env::var_os("NO_COLOR").is_some() || !std::io::stdout().is_terminal() {
         ""
     } else {
         code
@@ -51,15 +54,34 @@ pub fn print_summary(payload: &Payload) {
     println!();
 }
 
-/// the link is the product of the whole command: big, on its own line, easy to copy.
+/// the link is the product of the whole command, so it gets a frame — a sharp-cornered panel
+/// (corners are corners, per the house rules) that lifts it out of the log and says "this is
+/// the thing you came for." gold url, teal marker + verified badge; nothing else.
 pub fn print_link(url: &str, verified: bool) {
     let (gold, signal, dim, reset) = (color(GOLD), color(SIGNAL), color(DIM), color(RESET));
-    let mark = if verified {
-        format!("  {signal}verified{reset}")
-    } else {
-        format!("  {dim}unverified{reset}")
-    };
-    println!("  {signal}\u{25b8}{reset} {gold}{url}{reset}{mark}");
+
+    // show the address without its scheme — cleaner, still recognised and clickable.
+    let display = url
+        .trim_start_matches("https://")
+        .trim_start_matches("http://");
+    let status = if verified { "verified" } else { "unverified" };
+    let status_color = if verified { signal } else { dim };
+
+    // widths are measured on the *plain* text (chars, not bytes) so the box lines up regardless
+    // of the ansi wrapping or any multibyte glyphs in the address.
+    let left_w = display.chars().count() + 2; // "▸ " + address
+    let status_w = status.chars().count();
+    let gap = 4;
+    let inner = left_w + status_w + gap + 4; // + 2 spaces padding each side
+    let bar = "\u{2500}".repeat(inner);
+    let spaces = " ".repeat(gap);
+
+    println!();
+    println!("  {dim}\u{250c}{bar}\u{2510}{reset}");
+    println!(
+        "  {dim}\u{2502}{reset}  {signal}\u{25b8}{reset} {gold}{display}{reset}{spaces}{status_color}{status}{reset}  {dim}\u{2502}{reset}"
+    );
+    println!("  {dim}\u{2514}{bar}\u{2518}{reset}");
     println!();
 }
 
