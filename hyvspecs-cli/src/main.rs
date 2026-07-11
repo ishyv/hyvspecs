@@ -88,12 +88,12 @@ fn showcase(args: ShowcaseArgs) -> Result<()> {
     let mut publish_verified = args.verify;
     let mut github_token = config::github_token();
 
-    if args.verify && github_token.is_none() {
-        bail!("--verify requires a github login. run `hyvspecs login` first.");
+    if publish_verified {
+        publish_verified = ensure_valid_github_token(&mut github_token, is_interactive, true)?;
     }
 
     if is_interactive {
-        let (gold, signal, dim, reset) = (
+        let (gold, signal, _dim, reset) = (
             output::color("\x1b[38;5;179m"),
             output::color("\x1b[38;5;37m"),
             output::color("\x1b[38;5;240m"),
@@ -112,32 +112,7 @@ fn showcase(args: ShowcaseArgs) -> Result<()> {
             println!();
 
             if confirmed {
-                if github_token.is_none() {
-                    println!("    to verify your github handle, we need a personal access token.");
-                    println!("    please generate one at: {gold}https://github.com/settings/tokens/new?description=hyvspecs-cli&scopes=read:user{reset}");
-                    println!();
-                    print!("  {signal}{arrow}{reset} paste your token: ");
-                    io::stdout().flush()?;
-                    let trimmed = read_secret()?;
-                    if !trimmed.is_empty() {
-                        println!("    {dim}verifying...{reset}");
-                        match upload::verify_github_token(&trimmed) {
-                            Ok(username) => {
-                                config::save_github_token(&trimmed, &username)?;
-                                github_token = Some(trimmed);
-                                println!("    {dim}verified as @{}{reset}", username);
-                            }
-                            Err(e) => {
-                                println!("    {dim}verification failed: {}. publishing anonymously.{reset}", e);
-                            }
-                        }
-                    } else {
-                        println!("    {dim}empty token. publishing anonymously.{reset}");
-                    }
-                }
-                if github_token.is_some() {
-                    publish_verified = true;
-                }
+                publish_verified = ensure_valid_github_token(&mut github_token, is_interactive, false)?;
                 println!();
             }
         }
@@ -297,7 +272,10 @@ fn claim(card_id: &str) -> Result<()> {
         output::color("\x1b[0m"),
     );
 
-    let Some(github_token) = config::github_token() else {
+    let mut github_token = config::github_token();
+    let is_interactive = io::stdin().is_terminal() && io::stdout().is_terminal();
+    ensure_valid_github_token(&mut github_token, is_interactive, true)?;
+    let Some(github_token) = github_token else {
         bail!("not logged in. run `hyvspecs login` first");
     };
 
@@ -551,6 +529,121 @@ fn is_valid_id(s: &str) -> bool {
         return false;
     }
     s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
+fn ensure_valid_github_token(
+    github_token: &mut Option<String>,
+    is_interactive: bool,
+    force_verify: bool,
+) -> Result<bool> {
+    let (gold, signal, dim, reset) = (
+        output::color("\x1b[38;5;179m"),
+        output::color("\x1b[38;5;37m"),
+        output::color("\x1b[38;5;240m"),
+        output::color("\x1b[0m"),
+    );
+    let arrow = output::glyphs().arrow;
+
+    if let Some(token) = github_token.as_deref() {
+        if is_interactive {
+            println!("    {dim}verifying saved github token...{reset}");
+        }
+        match upload::verify_github_token(token) {
+            Ok(username) => {
+                if is_interactive {
+                    println!("    {dim}verified as @{}{reset}", username);
+                }
+                return Ok(true);
+            }
+            Err(e) => {
+                if is_interactive {
+                    println!("    {dim}saved github token is invalid or expired: {}{reset}", e);
+                    println!("    to verify your github handle, we need a new personal access token.");
+                    println!("    please generate one at: {gold}https://github.com/settings/tokens/new?description=hyvspecs-cli&scopes=read:user{reset}");
+                    println!();
+                    print!("  {signal}{arrow}{reset} paste your token: ");
+                    io::stdout().flush()?;
+                    let trimmed = read_secret()?;
+                    if !trimmed.is_empty() {
+                        println!("    {dim}verifying...{reset}");
+                        match upload::verify_github_token(&trimmed) {
+                            Ok(username) => {
+                                config::save_github_token(&trimmed, &username)?;
+                                *github_token = Some(trimmed);
+                                println!("    {dim}verified as @{}{reset}", username);
+                                return Ok(true);
+                            }
+                            Err(err) => {
+                                if force_verify {
+                                    bail!("verification failed: {}. aborting.", err);
+                                } else {
+                                    println!("    {dim}verification failed: {}. publishing anonymously.{reset}", err);
+                                    *github_token = None;
+                                    return Ok(false);
+                                }
+                            }
+                        }
+                    } else {
+                        if force_verify {
+                            bail!("empty token. aborting.");
+                        } else {
+                            println!("    {dim}empty token. publishing anonymously.{reset}");
+                            *github_token = None;
+                            return Ok(false);
+                        }
+                    }
+                } else {
+                    if force_verify {
+                        bail!("saved github token is invalid or expired. run `hyvspecs login` to re-authenticate.");
+                    } else {
+                        *github_token = None;
+                        return Ok(false);
+                    }
+                }
+            }
+        }
+    } else {
+        if is_interactive {
+            println!("    to verify your github handle, we need a personal access token.");
+            println!("    please generate one at: {gold}https://github.com/settings/tokens/new?description=hyvspecs-cli&scopes=read:user{reset}");
+            println!();
+            print!("  {signal}{arrow}{reset} paste your token: ");
+            io::stdout().flush()?;
+            let trimmed = read_secret()?;
+            if !trimmed.is_empty() {
+                println!("    {dim}verifying...{reset}");
+                match upload::verify_github_token(&trimmed) {
+                    Ok(username) => {
+                        config::save_github_token(&trimmed, &username)?;
+                        *github_token = Some(trimmed);
+                        println!("    {dim}verified as @{}{reset}", username);
+                        return Ok(true);
+                    }
+                    Err(err) => {
+                        if force_verify {
+                            bail!("verification failed: {}. aborting.", err);
+                        } else {
+                            println!("    {dim}verification failed: {}. publishing anonymously.{reset}", err);
+                            return Ok(false);
+                        }
+                    }
+                }
+            } else {
+                if force_verify {
+                    bail!("empty token. aborting.");
+                } else {
+                    println!("    {dim}empty token. publishing anonymously.{reset}");
+                    return Ok(false);
+                }
+            }
+        } else {
+            if force_verify {
+                bail!("--verify requires a github login. run `hyvspecs login` first.");
+            } else {
+                return Ok(false);
+            }
+        }
+    }
 }
 
 #[cfg(test)]
