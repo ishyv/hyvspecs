@@ -65,7 +65,7 @@
 
 	<footer>
 		<a href="/" class="logo-link" title="hyv-specs — share your hardware in 3D">
-			<span class="tooltip">generate your card</span>
+			<span class="tooltip">create your own</span>
 			<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" class="app-logo">
 				<rect width="32" height="32" fill="#0c0c0e" rx="6" stroke="#26282e" stroke-width="1"/>
 				<polyline
