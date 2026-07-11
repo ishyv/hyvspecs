@@ -4,16 +4,28 @@
 		ACESFilmicToneMapping,
 		AmbientLight,
 		Box3,
+		Color,
 		Group,
 		HemisphereLight,
+		Mesh,
+		MeshBasicMaterial,
 		MeshStandardMaterial,
 		Object3D,
 		PerspectiveCamera,
+		PlaneGeometry,
+		PMREMGenerator,
 		PointLight,
 		Scene,
+		Vector2,
 		Vector3,
 		WebGLRenderer
 	} from 'three';
+	// post-processing: without a bloom pass the divine/overdrive emissives read as merely
+	// brighter matte. bloom is the single biggest step from "webgl demo" to "forged instrument".
+	import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+	import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+	import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+	import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 	import type { Envelope } from '$lib/envelope';
 	import { scoreEnvelope } from '$lib/score';
 	import { cap } from '$lib/format';
@@ -36,6 +48,10 @@
 		const profile = scoreEnvelope(envelope);
 		const theme = resolveTheme(profile.e);
 		const glow = glowColor(profile.visual.heat, envelope.seed);
+		// per-part heat: each block burns to its OWN score's point on the card's palette, so a
+		// monster gpu blazes warm while a weak cpu stays cool — the "unbalanced rigs look
+		// unbalanced" law. the overall `glow` still drives the scene + HUD so chrome stays coherent.
+		const partGlow = (score: number) => glowColor(score, envelope.seed);
 		const rng = makeRng(envelope.seed);
 		const specs = envelope.specs;
 
@@ -51,15 +67,55 @@
 		const camera = new PerspectiveCamera(FOV, 1, 0.1, 100);
 		camera.position.set(0, 0, CAM_Z);
 
+		// image-based lighting from a DARK studio: a near-black surround with one soft overhead
+		// panel and a glow-tinted rim. metal now reflects a moody gradient with a single highlight
+		// streak — reading as polished metal in a dark rig, the way the aesthetic wants — instead
+		// of the flat matte it was. a bright room env would wash the heat colour out to white; this
+		// also does the job the extra `fill` light was faking, so that light drops right down.
+		const envScene = new Scene();
+		envScene.background = new Color(0x090a0d);
+		const keyPanel = new Mesh(new PlaneGeometry(26, 9), new MeshBasicMaterial({ color: 0xd7dee8 }));
+		keyPanel.position.set(2, 10, -1);
+		keyPanel.rotation.x = Math.PI / 2; // faces down onto the loadout
+		envScene.add(keyPanel);
+		const rimPanel = new Mesh(
+			new PlaneGeometry(16, 4),
+			new MeshBasicMaterial({ color: glow.clone().multiplyScalar(0.5) })
+		);
+		rimPanel.position.set(-9, -4, 3);
+		envScene.add(rimPanel);
+		const pmrem = new PMREMGenerator(renderer);
+		const envTex = pmrem.fromScene(envScene, 0.5).texture;
+		scene.environment = envTex;
+		scene.environmentIntensity = 0.55;
+		keyPanel.geometry.dispose();
+		rimPanel.geometry.dispose();
+
 		scene.add(new AmbientLight(0xffffff, theme.ambient));
 		scene.add(new HemisphereLight(0xbfc6cc, 0x0a0a0c, 0.5 + profile.e * 0.4));
 		const key = new PointLight(0xffffff, 45 + profile.e * 35); // hard specular off the metal
 		key.position.set(3, 4, 5);
 		const rim = new PointLight(glow.getHex(), 25 + profile.e * 45); // tier-tinted edge light
 		rim.position.set(-4, -2, -3);
-		const fill = new PointLight(0xffffff, 22); // keeps camera-facing faces off black
+		const fill = new PointLight(0xffffff, 8); // light touch now that IBL lifts the shadows
 		fill.position.set(0, 2, 8);
 		scene.add(key, rim, fill);
+
+		// bloom chain. threshold sits above lit-metal luminance so only the glowing seams and
+		// emissive parts bloom, never the whole plate. strength tracks the rig's energy and
+		// kicks harder in overdrive — the "ascension" the score promises and nothing delivered.
+		const composer = new EffectComposer(renderer);
+		composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+		composer.addPass(new RenderPass(scene, camera));
+		const bloomStrength =
+			0.22 + profile.visual.energy * 0.42 + (profile.visual.overdrive ? 0.18 : 0);
+		// threshold above 1.0 keeps lit metal and mid emissives out of the bloom so only the
+		// truly hot cores flare — radiant, but the hardware stays legible (the first law).
+		const bloom = new UnrealBloomPass(new Vector2(1, 1), bloomStrength, 0.55, 1.05);
+		composer.addPass(bloom);
+		// OutputPass applies the renderer's ACES tone-map + sRGB *after* bloom, so highlights
+		// roll off instead of clipping to flat white.
+		composer.addPass(new OutputPass());
 
 		const stage = buildStage(scene, glow, profile.visual.energy, rng, theme.name, key, rim);
 
@@ -84,18 +140,18 @@
 		const gpuValue = gpu ? gpu.model + (gpu.vram_mb ? ' · ' + cap(gpu.vram_mb) : '') : 'no gpu';
 		const gpuX = 0;
 		const gpuY = isMobile ? 2.2 : 1.1;
-		place(gpuCard(theme, profile.parts.gpu, glow, rng), gpuX, gpuY, 'gpu', gpuValue + (specs.gpus.length > 1 ? ` +${specs.gpus.length - 1}` : ''));
+		place(gpuCard(theme, profile.parts.gpu, partGlow(profile.parts.gpu), rng), gpuX, gpuY, 'gpu', gpuValue + (specs.gpus.length > 1 ? ` +${specs.gpus.length - 1}` : ''));
 
 		const cpuX = isMobile ? -1.2 : -3.3;
 		const cpuY = isMobile ? 0.7 : 0.5;
-		place(cpuChip(theme, profile.parts.cpu, glow, rng), cpuX, cpuY, 'cpu', specs.cpu.model);
+		place(cpuChip(theme, profile.parts.cpu, partGlow(profile.parts.cpu), rng), cpuX, cpuY, 'cpu', specs.cpu.model);
 
 		const modules = specs.ram.modules.map((m) => m.size_mb);
 		const modulesToRender = modules.slice(0, 4);
 		const ramX = isMobile ? 1.2 : 3.3;
 		const ramY = isMobile ? 0.8 : 0.6;
 		place(
-			ramSticks(theme, profile.parts.ram, modulesToRender, glow, rng),
+			ramSticks(theme, profile.parts.ram, modulesToRender, partGlow(profile.parts.ram), rng),
 			ramX,
 			ramY,
 			'ram',
@@ -135,7 +191,7 @@
 				name = 'other drives';
 				value = `+${remainingDrives.length} · ${cap(totalRemainingSize)}`;
 			}
-			place(driveUnit(theme, profile.parts.storage, d.kind, d.size_mb / 1024, value, glow, rng), dx, dy, name, value);
+			place(driveUnit(theme, profile.parts.storage, d.kind, d.size_mb / 1024, value, partGlow(profile.parts.storage), rng), dx, dy, name, value);
 		});
 
 		const osX = isMobile ? -1.2 : -3.3;
@@ -190,13 +246,38 @@
 
 		// idle: fans spin, an emissive breath at the power's energy, slow particle drift.
 		const TAU = Math.PI * 2;
-		const pulseAmt = 0.12 + profile.visual.energy * 0.4;
+		// the idle "breath". kept modest at the top end so a hot core pulses without spiking
+		// past the bloom threshold into a blown-out white every cycle.
+		const pulseAmt = 0.1 + profile.visual.energy * 0.22;
 		const base = breath.map((m) => m.emissiveIntensity);
+
+		// drag-to-orbit with inertia. when at rest the rig eases its pitch back to level and
+		// resumes a slow turntable, so an untouched card still shows it lives in 3d — and unlike
+		// the old absolute-cursor parallax, this works under touch (pointer events + touch-action).
+		let velY = 0;
+		let velX = 0;
+		let dragging = false;
+		let lastX = 0;
+		let lastY = 0;
+
 		const start = performance.now();
 		let raf = 0;
 		const tick = () => {
 			const t = (performance.now() - start) / 1000;
 			const b = 1 + pulseAmt * Math.sin(t * profile.visual.pulseHz * TAU);
+			// a slow idle float so the loadout hangs in space with weight, not pinned to a plane.
+			rig.position.y = Math.sin(t * 0.45) * 0.06;
+
+			// apply orbit momentum when the pointer is up; ease pitch back to level and drift into
+			// a lazy turntable once the fling has died down.
+			if (!dragging) {
+				rig.rotation.y += velY;
+				rig.rotation.x = Math.max(-0.7, Math.min(0.7, rig.rotation.x + velX));
+				velY *= 0.94;
+				velX *= 0.94;
+				rig.rotation.x += (0 - rig.rotation.x) * 0.02;
+				if (Math.abs(velY) < 0.0006) rig.rotation.y += 0.0016;
+			}
 			for (const s of spinners) s(t);
 			breath.forEach((m, i) => (m.emissiveIntensity = base[i] * b));
 			if (stage.animate) {
@@ -204,26 +285,49 @@
 			} else {
 				stage.particles.rotation.y = t * 0.02;
 			}
-			renderer.render(scene, camera);
+			composer.render();
 			projectLabels(host.clientWidth, host.clientHeight);
 			raf = requestAnimationFrame(tick);
 		};
 		tick();
 
-		// pointer parallax — the loadout is an object in space, not a flat image. kept gentle so
-		// the labels stay readable.
-		const onMove = (e: PointerEvent) => {
-			const r = host.getBoundingClientRect();
-			const nx = ((e.clientX - r.left) / r.width) * 2 - 1;
-			const ny = ((e.clientY - r.top) / r.height) * 2 - 1;
-			rig.rotation.y = nx * 0.18;
-			rig.rotation.x = ny * 0.12;
+		// grab-and-spin. dragging writes rotation directly and records a velocity; the tick loop
+		// carries that velocity as inertia once released.
+		const onDown = (e: PointerEvent) => {
+			dragging = true;
+			lastX = e.clientX;
+			lastY = e.clientY;
+			velY = 0;
+			velX = 0;
+			host.style.cursor = 'grabbing';
+			try {
+				host.setPointerCapture(e.pointerId);
+			} catch {
+				/* not all pointer types support capture */
+			}
 		};
+		const onMove = (e: PointerEvent) => {
+			if (!dragging) return;
+			velY = (e.clientX - lastX) * 0.006;
+			velX = (e.clientY - lastY) * 0.006;
+			lastX = e.clientX;
+			lastY = e.clientY;
+			rig.rotation.y += velY;
+			rig.rotation.x = Math.max(-0.7, Math.min(0.7, rig.rotation.x + velX));
+		};
+		const onUp = () => {
+			dragging = false;
+			host.style.cursor = 'grab';
+		};
+		host.style.cursor = 'grab';
+		host.addEventListener('pointerdown', onDown);
 		host.addEventListener('pointermove', onMove);
+		window.addEventListener('pointerup', onUp);
 
 		const resize = () => {
 			const { clientWidth: w, clientHeight: h } = host;
 			renderer.setSize(w, h);
+			composer.setSize(w, h);
 			camera.aspect = w / h;
 			camera.updateProjectionMatrix();
 			fit(camera.aspect);
@@ -234,7 +338,9 @@
 
 		return () => {
 			cancelAnimationFrame(raf);
+			host.removeEventListener('pointerdown', onDown);
 			host.removeEventListener('pointermove', onMove);
+			window.removeEventListener('pointerup', onUp);
 			ro.disconnect();
 			for (const el of els) el.remove();
 			// free gpu memory: geometries, materials and the procedural textures we minted. the
@@ -249,6 +355,9 @@
 					mat.dispose();
 				}
 			});
+			composer.dispose();
+			envTex.dispose();
+			pmrem.dispose();
 			renderer.dispose();
 			renderer.domElement.remove();
 		};

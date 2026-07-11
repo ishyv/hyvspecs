@@ -125,7 +125,16 @@ export function sticker(rng: Rng, title: string, sub: string): CanvasTexture {
 	x.font = 'bold 40px monospace';
 	x.fillText(sub.toUpperCase(), 16, 92);
 	x.font = '16px monospace';
-	x.fillText('SOLID • STATE • DRIVE', 16, 130);
+	// the footer names the actual medium — an hdd shouldn't claim to be a solid-state drive.
+	const k = title.toLowerCase();
+	const footer = k.includes('hdd')
+		? 'HARD • DISK • DRIVE'
+		: k.includes('nvme')
+			? 'NVME • SOLID • STATE'
+			: k.includes('ssd')
+				? 'SOLID • STATE • DRIVE'
+				: 'STORAGE • DRIVE';
+	x.fillText(footer, 16, 130);
 	// barcode
 	for (let bx = 16; bx < W - 16; bx += range(rng, 3, 7)) {
 		x.fillStyle = rng() > 0.5 ? '#1b1b1d' : '#cdc8bd';

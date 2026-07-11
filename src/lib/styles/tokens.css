@@ -1,0 +1,43 @@
+/* the single source of truth for the interface. the CARD's emitted light is physical
+   (seed-hued, heat-driven — see render/themes.ts); everything a human reads as UI stays
+   inside the two-accent law below. one ramp replaces the ~dozen ad-hoc grays that used to
+   drift across every route. */
+
+:root {
+	/* surface / depth — the void the hardware floats in */
+	--bg: #08080a;
+	--bg-raised: #0c0c0e; /* panels, chrome, the logo plate */
+	--bg-sunken: #040406; /* vignette floor */
+
+	/* neutral ramp (cool graphite). one ladder, dark → light. */
+	--n-100: #e8ebee; /* brightest text / values */
+	--n-200: #c7ccd1; /* primary text */
+	--n-300: #969ea6; /* strong labels */
+	--n-400: #8a9097; /* muted */
+	--n-500: #6a7178; /* dim */
+	--n-600: #4b4d56; /* faint */
+	--n-700: #26282e; /* hairline / border */
+	--n-800: #1a1c23; /* subtle border */
+	--n-900: #121317; /* border on pure black */
+
+	/* semantic aliases — reach for these, not the raw ramp */
+	--text: var(--n-200);
+	--text-bright: var(--n-100);
+	--muted: var(--n-400);
+	--dim: var(--n-500);
+	--line: var(--n-700);
+	--line-soft: var(--n-800);
+
+	/* the two accents — the ONLY chroma allowed in the interface. */
+	--accent: #d6a85a; /* gold — the wordmark, headings, the link */
+	--accent-dim: #a8813f;
+	--signal: #2f9e8f; /* teal — confirmation, verified, action */
+	--signal-dim: #24756b;
+
+	/* type */
+	--font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', 'Menlo', monospace;
+
+	/* motion — a single easing so nothing feels off-house */
+	--ease: cubic-bezier(0.2, 0.6, 0.2, 1);
+	--ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}

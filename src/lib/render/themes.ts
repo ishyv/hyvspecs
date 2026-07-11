@@ -31,8 +31,8 @@ const STOPS: Stop[] = [
 	{ at: 0.12, name: 'rust', metal: 0x4a3526, roughness: 0.95, metalness: 0.4, corrosion: 0.9, ambient: 0.34, emissive: 0.16 },
 	{ at: 0.35, name: 'iron', metal: 0x55555e, roughness: 0.7, metalness: 0.72, corrosion: 0.5, ambient: 0.4, emissive: 0.24 },
 	{ at: 0.55, name: 'overcharge', metal: 0x7a5a28, roughness: 0.48, metalness: 0.86, corrosion: 0.45, ambient: 0.44, emissive: 0.4 },
-	{ at: 0.74, name: 'alloy', metal: 0x747a82, roughness: 0.28, metalness: 0.93, corrosion: 0.18, ambient: 0.5, emissive: 0.55 },
-	{ at: 0.92, name: 'divine', metal: 0xd8bd82, roughness: 0.13, metalness: 1.0, corrosion: 0.0, ambient: 0.56, emissive: 0.78 }
+	{ at: 0.74, name: 'alloy', metal: 0x747a82, roughness: 0.28, metalness: 0.93, corrosion: 0.18, ambient: 0.5, emissive: 0.5 },
+	{ at: 0.92, name: 'divine', metal: 0xd8bd82, roughness: 0.13, metalness: 1.0, corrosion: 0.0, ambient: 0.56, emissive: 0.62 }
 ];
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;

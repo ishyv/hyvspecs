@@ -1,3 +1,37 @@
 @import 'tailwindcss';
+@import '../lib/styles/tokens.css';
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
+
+/* one reset for the whole app — every route used to redeclare this. the surfaces are
+   dark, mono, and near-black by default so a page that forgets to style itself still
+   looks like hyv-specs rather than a raw white document. */
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+	height: 100%;
+	background: var(--bg);
+	color: var(--text);
+	font-family: var(--font-mono);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	text-rendering: optimizeLegibility;
+}
+
+/* the app is a set of single-viewport instruments; nothing scrolls the document body.
+   individual scroll regions opt back in locally. */
+body {
+	overflow: hidden;
+}
+
+::selection {
+	background: color-mix(in srgb, var(--accent) 30%, transparent);
+	color: var(--text-bright);
+}

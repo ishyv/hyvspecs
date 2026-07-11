@@ -332,20 +332,31 @@ function fan(radius: number, body: MeshStandardMaterial, hub: MeshStandardMateri
 	}
 
 	if (iron) {
-		// Iron (Industrial Blower): Concentric fins inside a drum cage spinning fast
+		// Iron (Industrial Blower): a squirrel-cage. a solid drum face, then a dense ring of
+		// SHORT radial fins around its rim (the old version used 12 long tangential bars that
+		// read as a tangle of crossed sticks), capped by a hub.
 		const wheel = new Group();
-		const baseDisc = new Mesh(new CylinderGeometry(radius, radius, 0.04, 16), body);
+		const baseDisc = new Mesh(new CylinderGeometry(radius * 0.96, radius * 0.96, 0.05, 28), body);
 		baseDisc.rotation.x = Math.PI / 2;
+		baseDisc.position.z = 0.02;
 		wheel.add(baseDisc);
-		
+
 		const finMat = DARK();
-		for (let i = 0; i < 12; i++) {
-			const a = (i / 12) * Math.PI * 2;
-			const fMesh = new Mesh(new BoxGeometry(0.022, radius * 0.9, 0.2), finMat);
-			fMesh.rotation.z = a;
-			fMesh.position.set(Math.cos(a) * radius * 0.52, Math.sin(a) * radius * 0.52, 0.1);
+		const finGeo = new BoxGeometry(radius * 0.3, 0.02, 0.16); // long axis is radial
+		const N = 26;
+		for (let i = 0; i < N; i++) {
+			const a = (i / N) * Math.PI * 2;
+			const fMesh = new Mesh(finGeo, finMat);
+			fMesh.position.set(Math.cos(a) * radius * 0.62, Math.sin(a) * radius * 0.62, 0.1);
+			fMesh.rotation.z = a; // points straight out — a fine-toothed cage, not crossed bars
 			wheel.add(fMesh);
 		}
+
+		const hubCap = new Mesh(new CylinderGeometry(radius * 0.3, radius * 0.3, 0.14, 16), hub);
+		hubCap.rotation.x = Math.PI / 2;
+		hubCap.position.z = 0.1;
+		wheel.add(hubCap);
+
 		group.add(wheel);
 		return {
 			group,
@@ -366,37 +377,44 @@ function fan(radius: number, body: MeshStandardMaterial, hub: MeshStandardMateri
 		cap.position.z = 0.06;
 		spinner.add(cap);
 
-		// Only 3 uneven/broken blades
+		// Only 3 uneven/broken paddle blades — a fan that's lost most of its blades. still
+		// pitched like the healthy fan so the survivors read as blades, not sticks.
 		const angles = [0, 1.25, 3.5];
 		for (const a of angles) {
-			const blade = new Mesh(new BoxGeometry(radius * 0.8, radius * 0.18, 0.03), body);
-			blade.position.set(Math.cos(a) * radius * 0.45, Math.sin(a) * radius * 0.45, 0.05);
-			blade.rotation.z = a;
+			const blade = new Mesh(new BoxGeometry(radius * 0.6, radius * 0.34, 0.03), body);
+			blade.position.set(Math.cos(a) * radius * 0.5, Math.sin(a) * radius * 0.5, 0.05);
+			blade.rotation.z = a + 0.62;
 			spinner.add(blade);
 		}
 		group.add(spinner);
 		return { group, spin: (t) => (spinner.rotation.z = t * 1.0) };
 	}
 
-	// Standard
-	const disc = new Mesh(new CylinderGeometry(radius, radius, 0.08, 20), body);
+	// Standard axial fan: a recessed disc + rim, then nine wide paddle blades PITCHED off the
+	// radial. thin radial spokes read as a crossed-sticks scribble; pitched paddles seated near
+	// the rim overlap into a proper fan that actually looks like it moves air.
+	const disc = new Mesh(new CylinderGeometry(radius, radius, 0.08, 24), body);
 	disc.rotation.x = Math.PI / 2;
-	const ring = new Mesh(new TorusGeometry(radius * 1.02, 0.04, 6, 22), hub);
+	const ring = new Mesh(new TorusGeometry(radius * 1.02, 0.05, 8, 28), hub);
 	ring.position.z = 0.05;
 	group.add(disc, ring);
 
 	const spinner = new Group();
-	const cap = new Mesh(new CylinderGeometry(radius * 0.2, radius * 0.2, 0.12, 12), hub);
-	cap.rotation.x = Math.PI / 2;
-	cap.position.z = 0.06;
-	spinner.add(cap);
+	// seven blades running hub→rim (centre at ~0.4r, long enough to nearly reach both), with a
+	// gentle pitch so they sweep. spaced wider than they are wide, so each reads as a distinct
+	// blade instead of a solid smear; a tiny per-blade z-step avoids coplanar z-fighting.
+	const bladeGeo = new BoxGeometry(radius * 0.74, radius * 0.24, 0.02);
 	for (let i = 0; i < 7; i++) {
 		const a = (i / 7) * Math.PI * 2;
-		const blade = new Mesh(new BoxGeometry(radius * 0.8, radius * 0.18, 0.03), body);
-		blade.position.set(Math.cos(a) * radius * 0.45, Math.sin(a) * radius * 0.45, 0.05);
-		blade.rotation.z = a;
+		const blade = new Mesh(bladeGeo, body);
+		blade.position.set(Math.cos(a) * radius * 0.4, Math.sin(a) * radius * 0.4, 0.04 + i * 0.0015);
+		blade.rotation.z = a + 0.32;
 		spinner.add(blade);
 	}
+	const cap = new Mesh(new CylinderGeometry(radius * 0.22, radius * 0.22, 0.16, 16), hub);
+	cap.rotation.x = Math.PI / 2;
+	cap.position.z = 0.08; // sits proud of the blades so the hub caps the centre cleanly
+	spinner.add(cap);
 	group.add(spinner);
 	return { group, spin: (t) => (spinner.rotation.z = t * 1.6) };
 }
@@ -1065,7 +1083,7 @@ export function osBadge(theme: Theme, os: string, glow: Color, rng: Rng): Part {
 	}
 
 	// Generate and apply the hand-drawn kid-crayon logo texture
-	const logoTexture = createOsLogoTexture(os);
+	const logoTexture = createOsLogoTexture(os, rng);
 	const logoMat = new MeshStandardMaterial({
 		map: logoTexture,
 		transparent: true,
@@ -1082,86 +1100,88 @@ export function osBadge(theme: Theme, os: string, glow: Color, rng: Rng): Part {
 	return { object: g, materials: [mat, inset, logoMat], anchor: anchor(g, 0.32) };
 }
 
-// Draw a grainy crayon line by rendering tiny overlapping dots
-function drawCrayonLine(
-	ctx: CanvasRenderingContext2D,
-	x1: number,
-	y1: number,
-	x2: number,
-	y2: number,
-	color: string,
-	width: number
-) {
-	ctx.save();
-	ctx.fillStyle = color;
-
-	const dx = x2 - x1;
-	const dy = y2 - y1;
-	const distance = Math.hypot(dx, dy);
-	const steps = Math.max(12, Math.floor(distance / 1.5));
-
-	for (let i = 0; i <= steps; i++) {
-		const t = i / steps;
-		const cx = x1 + dx * t;
-		const cy = y1 + dy * t;
-
-		const dotCount = Math.max(3, Math.floor(width));
-		for (let p = 0; p < dotCount; p++) {
-			const angle = Math.random() * Math.PI * 2;
-			const radius = Math.random() * (width / 2);
-			const px = cx + Math.cos(angle) * radius;
-			const py = cy + Math.sin(angle) * radius;
-			ctx.beginPath();
-			ctx.arc(px, py, 0.5 + Math.random() * 0.8, 0, Math.PI * 2);
-			ctx.fill();
-		}
-	}
-	ctx.restore();
-}
-
-// Draw a filled shape with wobbly child-like borders and a crayon outline
-function drawCrayonPolygon(
-	ctx: CanvasRenderingContext2D,
-	points: Array<[number, number]>,
-	fillColor: string,
-	strokeColor: string,
-	strokeWidth: number
-) {
-	ctx.save();
-	ctx.fillStyle = fillColor;
-	ctx.beginPath();
-	
-	for (let i = 0; i < points.length; i++) {
-		const [x, y] = points[i];
-		const next = points[(i + 1) % points.length];
-		const steps = 6;
-		if (i === 0) {
-			ctx.moveTo(x, y);
-		}
-		for (let s = 1; s <= steps; s++) {
-			const t = s / steps;
-			const jx = x + (next[0] - x) * t + (Math.random() - 0.5) * 1.6;
-			const jy = y + (next[1] - y) * t + (Math.random() - 0.5) * 1.6;
-			ctx.lineTo(jx, jy);
-		}
-	}
-	ctx.fill();
-	ctx.restore();
-
-	for (let i = 0; i < points.length; i++) {
-		const p1 = points[i];
-		const p2 = points[(i + 1) % points.length];
-		drawCrayonLine(ctx, p1[0], p1[1], p2[0], p2[1], strokeColor, strokeWidth);
-	}
-}
-
-// Create a wobbly, kid-styled OS logo on an HTML5 canvas texture
-function createOsLogoTexture(os: string): CanvasTexture {
+// Create a wobbly, kid-styled OS logo on an HTML5 canvas texture. the two crayon helpers
+// live inside so they close over the seeded `rng` — the wobble must be deterministic
+// (same seed → same card), which the old Math.random() calls silently broke.
+function createOsLogoTexture(os: string, rng: Rng): CanvasTexture {
 	const canvas = document.createElement('canvas');
 	canvas.width = 256;
 	canvas.height = 256;
 	const ctx = canvas.getContext('2d');
 	if (!ctx) return new CanvasTexture(canvas);
+
+	// grainy crayon line: tiny overlapping dots scattered along the segment.
+	function drawCrayonLine(
+		ctx: CanvasRenderingContext2D,
+		x1: number,
+		y1: number,
+		x2: number,
+		y2: number,
+		color: string,
+		width: number
+	) {
+		ctx.save();
+		ctx.fillStyle = color;
+
+		const dx = x2 - x1;
+		const dy = y2 - y1;
+		const distance = Math.hypot(dx, dy);
+		const steps = Math.max(12, Math.floor(distance / 1.5));
+
+		for (let i = 0; i <= steps; i++) {
+			const t = i / steps;
+			const cx = x1 + dx * t;
+			const cy = y1 + dy * t;
+
+			const dotCount = Math.max(3, Math.floor(width));
+			for (let p = 0; p < dotCount; p++) {
+				const angle = rng() * Math.PI * 2;
+				const radius = rng() * (width / 2);
+				const px = cx + Math.cos(angle) * radius;
+				const py = cy + Math.sin(angle) * radius;
+				ctx.beginPath();
+				ctx.arc(px, py, 0.5 + rng() * 0.8, 0, Math.PI * 2);
+				ctx.fill();
+			}
+		}
+		ctx.restore();
+	}
+
+	// filled shape with wobbly child-like borders and a crayon outline.
+	function drawCrayonPolygon(
+		ctx: CanvasRenderingContext2D,
+		points: Array<[number, number]>,
+		fillColor: string,
+		strokeColor: string,
+		strokeWidth: number
+	) {
+		ctx.save();
+		ctx.fillStyle = fillColor;
+		ctx.beginPath();
+
+		for (let i = 0; i < points.length; i++) {
+			const [x, y] = points[i];
+			const next = points[(i + 1) % points.length];
+			const steps = 6;
+			if (i === 0) {
+				ctx.moveTo(x, y);
+			}
+			for (let s = 1; s <= steps; s++) {
+				const t = s / steps;
+				const jx = x + (next[0] - x) * t + (rng() - 0.5) * 1.6;
+				const jy = y + (next[1] - y) * t + (rng() - 0.5) * 1.6;
+				ctx.lineTo(jx, jy);
+			}
+		}
+		ctx.fill();
+		ctx.restore();
+
+		for (let i = 0; i < points.length; i++) {
+			const p1 = points[i];
+			const p2 = points[(i + 1) % points.length];
+			drawCrayonLine(ctx, p1[0], p1[1], p2[0], p2[1], strokeColor, strokeWidth);
+		}
+	}
 
 	const osLower = os.toLowerCase();
 
